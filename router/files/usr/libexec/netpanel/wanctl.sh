@@ -291,6 +291,7 @@ set_mode() {
 	rb_begin
 	uci commit mwan3
 	svc /etc/init.d/mwan3 restart
+	rpf
 	log_event "*" "mode:$mode:$primary"
 	printf '{"ok":true,"pending_until":%s}\n' "$(cat "$RB/until")"
 }
@@ -459,9 +460,23 @@ add_wan() {
 	uci commit network; uci commit firewall; uci commit mwan3
 	svc /etc/init.d/network reload
 	svc /etc/init.d/firewall reload
+	rpf
 	log_event "$n" "added:$dev"
 	printf '{"mode":"%s","primary":"%s"}' "$mode" "$primary" | NP_NO_RB_MSG=1 set_mode >/dev/null
 	printf '{"ok":true,"name":"%s","pending_until":%s}\n' "$n" "$(cat "$RB/until")"
+}
+
+
+# ── çoklu hat: ters yol filtresi ────────────────────────────────────────────
+# rp_filter=1 (sıkı) iken ikinci hattan gelen yanıtlar atılır; mwan3 hattı yoklayamaz ve
+# hat internetli olduğu halde "çevrimdışı" görünür. Birden fazla WAN varsa gevşek (2) yapılır.
+RPF_CONF=${NP_RPF_CONF:-/etc/sysctl.d/90-netos-multiwan.conf}
+RPF_PROC=${NP_RPF_PROC:-/proc/sys/net/ipv4/conf/all/rp_filter}
+rpf() {
+	[ "$(np_wan_nets | grep -c .)" -gt 1 ] || return 0
+	[ -f "$RPF_CONF" ] || printf '%s\n' "# NetOS: çoklu internet hattı (mwan3) için gevşek ters yol filtresi" "net.ipv4.conf.all.rp_filter=2" >"$RPF_CONF"
+	[ "$(cat "$RPF_PROC" 2>/dev/null)" = 1 ] || return 0
+	echo 2 >"$RPF_PROC" && logger -t netos "rp_filter gevşek moda alındı (çoklu hat)"
 }
 
 case "$1" in
@@ -474,5 +489,6 @@ reconnect) reconnect ;;
 events) events ;;
 ports) ports ;;
 add) add_wan ;;
-*) echo "kullanım: $0 config|set|mode|confirm|revert|reconnect|events|ports|add" >&2; exit 1 ;;
+rpf) rpf ;;
+*) echo "kullanım: $0 config|set|mode|confirm|revert|reconnect|events|ports|add|rpf" >&2; exit 1 ;;
 esac
