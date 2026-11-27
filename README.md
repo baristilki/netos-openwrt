@@ -22,7 +22,9 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 - WireGuard VPN sunucusu: cihaz ekle → QR kodu telefona okut
 - Wi-Fi'yi QR kod ile paylaşma
 - Cihaz eve geldi / ayrıldı bildirimi (Telegram), günlük zamanlanmış hız testi
-- İlk kurulum sihirbazı (şifresiz router'ı algılar), HTTPS, otomatik oturum kapatma
+- İlk kurulum sihirbazı (şifresiz router'ı algılar; tek ya da iki internet hattı seçimi), HTTPS, otomatik oturum kapatma
+- Portlar: kablo takılı mı, bağlantı hızı (1 / 2.5 Gbit…), canlı trafik, düşük hız / half duplex uyarısı
+- İkinci internet hattı ekleme (boş port + DHCP/PPPoE, yedek hat ya da birlikte kullanım, mwan3)
 - Giriş deneme sınırı (NetOS/LuCI/SSH: 5 hatada 5-15-60 dk kilit), isteğe bağlı sıkı mod
 - Türkçe / English arayüz (üst bardan değiştirilir)
 - Sistem günlüğü görüntüleyici, sıcaklık/disk/bellek uyarıları, zamanlı yeniden başlatma

@@ -666,6 +666,28 @@
     return { pendingUntil: r.pending_until ? r.pending_until * 1000 + wanSkew : null };
   }
 
+  // Fiziksel portlar -> { t, ports:[{ name, label, mac, driver, virtual, link, speed (Mbit, 0 = bilinmiyor), maxSpeed,
+  //   duplex, flaps (açılıştan beri kopma), role: 'wan'|'lan'|'free'|'other', bridge, nets[], rx, tx (bayt) }] }
+  async function getPorts() {
+    const r = await ubus('netpanel', 'wan_ports');
+    return {
+      t: r.t || 0,
+      ports: (r.ports || []).map((p) => ({
+        name: p.name, label: p.label || '', mac: p.mac || '', driver: p.driver || '', virtual: !!p.virtual, link: !!p.link,
+        speed: p.speed > 0 ? p.speed : 0, maxSpeed: p.max_speed > 0 ? p.max_speed : 0, duplex: p.duplex || '', flaps: p.flaps || 0,
+        role: p.role || 'free', bridge: p.bridge || '', nets: p.nets || [], rx: Number(p.rx) || 0, tx: Number(p.tx) || 0,
+      })),
+    };
+  }
+  // İkinci internet hattı: a = { device, proto: 'dhcp'|'pppoe', username?, password?, vlan?, mode: 'failover'|'balanced', primary }
+  async function addWan(a) {
+    if (!a.device) throw new ApiError('Boş bir port seçin', 'validate');
+    const v = Number(a.vlan) || 0;
+    if (!Number.isInteger(v) || v < 0 || v > 4094) throw new ApiError('VLAN 0-4094 arası olmalı', 'validate');
+    if (a.proto === 'pppoe' && (!a.username || !a.password)) throw new ApiError('PPPoE kullanıcı adı ve şifresi gerekli', 'validate');
+    const r = await npCall('wan_add', { device: a.device, proto: a.proto || 'dhcp', username: a.username || '', password: a.password || '', vlan: v, mode: a.mode || 'failover', primary: a.primary || '' });
+    return { name: r.name, pendingUntil: r.pending_until ? r.pending_until * 1000 + wanSkew : null };
+  }
   async function confirmWan() { await npCall('wan_confirm', {}); }
   async function revertWan() { await npCall('wan_revert', {}); }
   async function reconnectWan(name) { await npCall('wan_reconnect', { name }); }
@@ -1186,14 +1208,14 @@
   const EVENT_LABELS = {
     ifup: ['Bağlandı', 'ok'], ifdown: ['Bağlantı kesildi', 'bad'],
     connected: ['İnternet erişimi geldi', 'ok'], disconnected: ['İnternet erişimi yok', 'bad'],
-    configured: ['Ayarlar değiştirildi', 'info'], reconnect: ['Yeniden bağlanma istendi', 'info'],
+    configured: ['Ayarlar değiştirildi', 'info'], added: ['Yeni hat eklendi', 'ok'], reconnect: ['Yeniden bağlanma istendi', 'info'],
     reverted: ['Ayarlar otomatik geri alındı', 'warn'],
   };
   // -> [{ t (ms), iface ('*' = genel), event, label, level: ok|bad|info|warn }] en yeni önce
   async function getWanEvents() {
     const r = await ubus('netpanel', 'wan_events');
     return (r.events || []).map((e) => {
-      let [label, level] = EVENT_LABELS[e.event] || [e.event, 'info'];
+      let [label, level] = EVENT_LABELS[e.event] || EVENT_LABELS[e.event.split(':')[0]] || [e.event, 'info'];
       if (/^mode:/.test(e.event)) {
         const [, m, p] = e.event.split(':');
         label = 'Çoklu WAN modu: ' + (MODE_LABELS[m] || m) + (p ? ' (ana: ' + p + ')' : '');
@@ -1452,7 +1474,14 @@
       wan2: { proto: 'dhcp', enabled: true, device: 'eth2', base_device: 'eth2', vlan: 0, mtu: 1492, metric: 20, username: '', password_set: false, ipaddr: '', netmask: '', gateway: '', peerdns: false, dns: ['1.1.1.1'], mwan: true } } };
     let wanBackup = null, wanPending = null;
     const nowSec = () => Math.floor(Date.now() / 1000);
-    const sqm = { offload: true, queues: [{ section: 'eth1', enabled: true, interface: 'eth1', download: 900000, upload: 900000, qdisc: 'cake', script: 'piece_of_cake.qos', linklayer: 'none', overhead: 0 }] };
+    if (/[?&]onewan/.test(location.search)) delete wanCfg.wans.wan2;
+    const demoPorts = [
+      { name: 'eth0', link: true, speed: 2500, max_speed: 2500, duplex: 'full', flaps: 0, role: 'lan', bridge: 'br-lan', nets: [], r: 9e6 },
+      { name: 'eth1', link: true, speed: 1000, max_speed: 2500, duplex: 'full', flaps: 2, role: 'wan', bridge: '', nets: ['wan', 'Turknet'], r: 6e6 },
+      { name: 'eth2', link: !!wanCfg.wans.wan2, speed: wanCfg.wans.wan2 ? 1000 : 0, max_speed: 1000, duplex: 'full', flaps: 0, role: wanCfg.wans.wan2 ? 'wan' : 'free', bridge: '', nets: wanCfg.wans.wan2 ? ['wan2'] : [], r: 1e6 },
+      { name: 'eth3', link: false, speed: 0, max_speed: 2500, duplex: 'unknown', flaps: 0, role: 'free', bridge: '', nets: [], r: 0 },
+    ];
+    const sqm = { offload: /[?&]offload/.test(location.search), queues: [{ section: 'eth1', enabled: true, interface: 'eth1', download: 900000, upload: 900000, qdisc: 'cake', script: 'piece_of_cake.qos', linklayer: 'none', overhead: 0 }] };
     let st = null; const stHist = [[nowSec() - 86400, 'Turknet', 921.3, 884.6, 4.2, 6.1, 12.3, 'A']];
     function stTick() {
       if (!st || !st.running) return;
@@ -1553,7 +1582,7 @@
     const demoUpd = { current: '1.2.0', auto: false, t0: 0 };
     const demoWans = [{ name: 'Turknet', ip: '100.66.93.98', kind: 'cgnat' }, { name: 'wan2', ip: '192.168.2.212', kind: 'private' }];
     const demoPf = { n: 2, rules: [{ id: 'cfg01', name: 'Kamera', proto: 'tcp', ext_port: '8443', ip: '192.168.1.139', int_port: '443', enabled: true }] };
-    const demoPkg = { upnp: false, wireguard: false, qr: true, wol: true, t: {} };
+    const demoPkg = { mwan3: true, upnp: false, wireguard: false, qr: true, wol: true, t: {} };
     const demoUpnp = { enabled: false };
     const demoLan = { ip: '192.168.1.1', prefix: 24, dhcp: { enabled: true, start: 100, limit: 150, leasetime: '12h' }, dns: [], pending: null };
     const demoVpn = { configured: false, enabled: true, port: 51820, endpoint: '', n: 1, peers: [] };
@@ -1673,6 +1702,23 @@
       'netpanel.wan_confirm': () => { wanBackup = null; wanPending = null; clearTimeout(wanBegin.t); return { ok: true }; },
       'netpanel.wan_revert': () => { if (wanBackup) { Object.assign(wanCfg, wanBackup); wanBackup = null; wanPending = null; wanEvents.unshift([nowSec(), '*', 'reverted']); } return { ok: true }; },
       'netpanel.wan_reconnect': (a) => { wanEvents.unshift([nowSec(), a.name, 'reconnect']); return { ok: true }; },
+      'netpanel.wan_ports': () => {
+        const s = (Date.now() - 1.7e12) / 1000;
+        return { t: nowSec(), ports: demoPorts.map(({ r, ...p }) => ({ ...p, label: '', mac: '02:00:00:00:00:0' + p.name.slice(3), driver: 'igc', virtual: false, rx: String(Math.round(s * r * 0.9)), tx: String(Math.round(s * r * 0.25)) })) };
+      },
+      'netpanel.wan_add': (a) => {
+        const p = demoPorts.find((x) => x.name === a.device);
+        if (!p || p.role !== 'free') return { ok: false, error: 'Bu port kullanımda; boş bir port seçin' };
+        if (a.proto === 'pppoe' && (!a.username || !a.password)) return { ok: false, error: 'PPPoE kullanıcı adı ve şifresi gerekli' };
+        let i = 2; while (wanCfg.wans['wan' + i]) i++;
+        const n = 'wan' + i, dev = a.vlan ? a.device + '.' + a.vlan : a.device;
+        wanBegin();
+        wanCfg.wans[n] = { proto: a.proto, enabled: true, device: dev, base_device: a.device, vlan: a.vlan || 0, mtu: 0, metric: 10 * i, username: a.username || '', password_set: !!a.password, ipaddr: '', netmask: '', gateway: '', peerdns: true, dns: [], mwan: true };
+        Object.assign(p, { role: 'wan', nets: [n], link: true, speed: p.max_speed, r: 2e6 });
+        wanCfg.mode = a.mode; wanCfg.primary = a.primary || 'Turknet';
+        wanEvents.unshift([nowSec(), n, 'added:' + a.device]);
+        return { ok: true, name: n, pending_until: wanPending };
+      },
       'netpanel.wan_events': () => ({ events: wanEvents.map(([t, iface, event]) => ({ t, iface, event })) }),
       'uci.get': (a) => (a.config === 'wireless' && OWRT_WIFI ? { values: JSON.parse(JSON.stringify(wireless)) }
         : a.config === 'firewall' ? { values: { cfg01: { '.type': 'zone', name: 'lan', network: ['lan'] }, cfg02: { '.type': 'zone', name: 'wan', network: ['Turknet', 'wan2'] } } }
@@ -1967,7 +2013,7 @@
     setClient, forgetClient, setWifi, reboot,
     getHuawei, setHuaweiWifi, setHuaweiConfig, getHuaweiWifi, saveHuaweiWifi, scanHuaweiChannels, WIFI_CHANNELS: CHANNELS,
     getWans: () => getWans(), getSystem, changePassword, scanWeb,
-    getWanConfig, setWan, setWanMode, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
+    getWanConfig, setWan, setWanMode, getPorts, addWan, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
     getUsage, getPingHistory, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
     getPortForwards, savePortForward, deletePortForward, setUpnp, setFirewall, getConnections, getLan, setLan, confirmLan, revertLan,

@@ -296,12 +296,76 @@
       '<div class="empty">Wi-Fi a\u011f\u0131 bulunamad\u0131.</div>'
     );
   }
+  function lsGet(k) {
+    try {
+      return localStorage.getItem(k);
+    } catch (_) {
+      return null;
+    }
+  }
+  function offloadAlert() {
+    return `<div class="alert offload-alert"><span class="offload-i">ⓘ</span><div><strong>Flow offloading açık</strong><p>Bu OpenWrt özelliği, kurulmuş bağlantıların paketlerini güvenlik duvarının yanından geçirerek işlemciyi rahatlatır. Ancak NetOS bu trafiği göremez: cihaz hızları ve kullanım istatistikleri eksik görünür, cihaz hız sınırları ve oyun önceliği çalışmaz.</p><p>Mini PC gibi güçlü bir işlemcide kapatmanız önerilir; zayıf bir router’da (ör. tek çekirdekli) 1 Gbit hızlarda açık kalması daha iyi olabilir.</p><div class="alert-actions"><button class="btn small primary" type="button" data-disable-offload>Kapat (önerilen)</button><button class="btn small" type="button" data-keep-offload>Açık kalsın</button></div></div></div>`;
+  }
+  /* ── Fiziksel portlar ── */
+  const portSpeed = (m) => (!m ? '' : m >= 1000 ? (m % 1000 ? (m / 1000).toFixed(1) : m / 1000) + ' Gbit/s' : m + ' Mbit/s');
+  function setPorts(p) {
+    let prev = state.xPorts, rate = {};
+    if (prev?.t && p.t > prev.t)
+      for (const x of p.ports) {
+        let o = prev.ports.find((y) => y.name === x.name);
+        if (o && x.rx >= o.rx && x.tx >= o.tx) rate[x.name] = { down: ((x.rx - o.rx) * 8) / (p.t - prev.t), up: ((x.tx - o.tx) * 8) / (p.t - prev.t) };
+      }
+    p.rate = Object.keys(rate).length ? rate : prev?.rate || {};
+    state.xPorts = p;
+  }
+  function portRole(p) {
+    let wl = state.wanConfig?.wans || [], wanNames = (state.overview?.wans || []).map((w) => w.name);
+    if (p.role === 'wan') {
+      let n = p.nets.filter((x) => wanNames.includes(x) || wl.some((w) => w.name === x)),
+        lbl = n.map((x) => (state.overview?.wans || []).find((w) => w.name === x)?.label || x);
+      return ['wan', 'İnternet', lbl.join(', ') || p.nets.join(', ')];
+    }
+    if (p.role === 'lan') return ['lan', 'Yerel ağ', p.bridge === 'br-lan' ? 'LAN' : p.bridge];
+    if (p.role === 'other') return ['lan', 'Ağ', p.nets.join(', ')];
+    return ['free', 'Boş', 'Kullanılmıyor'];
+  }
+  function portsCard() {
+    if (!state.xPorts && !state.xPortsError && !state.xLoading?.xPorts)
+      (async () => {
+        state.xLoading = { ...state.xLoading, xPorts: true };
+        try {
+          setPorts(await NP.getPorts());
+        } catch (e) {
+          state.xPortsError = e.message;
+        }
+        state.xLoading.xPorts = false;
+        if (state.page === '/') updateHomeLive();
+      })();
+    let P = state.xPorts;
+    if (!P?.ports?.length) return '';
+    let warns = [];
+    let tiles = P.ports
+      .map((p) => {
+        let [cls, title, sub] = portRole(p),
+          slow = p.link && p.speed && p.maxSpeed > p.speed,
+          half = p.link && p.duplex === 'half',
+          r = P.rate?.[p.name],
+          sp = !p.link ? 'Kablo yok' : p.speed ? portSpeed(p.speed) : p.virtual ? 'Sanal bağlantı' : 'Bağlı';
+        if (slow) warns.push(`<b>${esc(p.name)}</b> portu ${portSpeed(p.maxSpeed)} destekliyor ama ${portSpeed(p.speed)} ile bağlı. Kabloyu (en az Cat5e, 2.5 Gbit için Cat6) ve karşı cihazın port hızını kontrol edin.`);
+        if (half) warns.push(`<b>${esc(p.name)}</b> yarı çift yönlü (half duplex) çalışıyor; bu genelde kablo ya da karşı cihaz sorunudur ve hızı düşürür.`);
+        let tip = [p.name, p.mac, p.driver, p.flaps ? `açılıştan beri ${p.flaps} kez koptu` : ''].filter(Boolean).join(' · ');
+        return `<div class="port-tile ${cls}${p.link ? ' up' : ''}${slow || half ? ' warn' : ''}" title="${esc(tip)}"><div class="port-jack"><i></i><b></b></div><div class="port-info"><strong>${esc(title)}</strong><span>${esc(sub)}</span><span class="port-speed num">${esc(sp)}${p.link && p.speed && p.duplex === 'full' ? '' : ''}</span>${p.link && r ? `<small class="num">↓ ${esc(NP.fmt.bits(r.down))} · ↑ ${esc(NP.fmt.bits(r.up))}</small>` : ''}<small class="port-name num">${esc(p.name)}${p.flaps ? ` · ${p.flaps} kopma` : ''}</small></div></div>`;
+      })
+      .join('');
+    let virt = P.ports.some((p) => p.virtual && p.link && !p.speed);
+    return `<section class="card span-12">${cardHead('ethernet', 'Portlar')}<div class="port-grid">${tiles}</div>${warns.map((w) => `<div class="alert">⚠ ${w}</div>`).join('')}${virt ? '<p class="field-hint">Router sanal makinede çalışıyor: portlar sanal (virtio) olduğu için kablonun gerçek hızı burada görünmez; Proxmox’ta fiziksel ağ kartının hızına bakın. Ağ kartını sanal makineye doğrudan verirseniz (PCI passthrough) hız ve kablo durumu burada görünür.</p>' : '<p class="field-hint">Router’a takılı kabloların bağlantı hızı. Arkadaki cihazların (ör. bir switch’e bağlı PC) hızı yalnız o cihazın kendisinde görünür.</p>'}</section>`;
+  }
   function home() {
-    let off = state.status.offload && !state.alertOff;
+    let off = state.status.offload && !state.alertOff && !lsGet('np_offload_ok');
     let online = state.clients.filter((c) => c.online && !c.blocked),
       total = state.clients.length;
     let top = [...online].sort((a, b) => b.down + b.up - (a.down + a.up)).slice(0, 5);
-    return `${pageHead('Genel bakış', esc(state.overview?.hostname || 'Ağınız'), esc(state.overview?.model || 'Router durumu ve bağlı cihazlar'))}${off ? '<div class="alert"><span>ⓘ</span><span>Flow offloading açık: hız sınırları ve cihaz hızları doğru çalışmaz.</span><button aria-label="Uyarıyı kapat" data-dismiss-alert>×</button></div>' : ''}<div class="grid">${internetCard()}<section class="card span-5">${cardHead('wifi', 'Wi-Fi', `<a href="#/wifi">Tüm ağlar →</a>`)}<div class="wifi-list">${wifiRows()}</div></section><section class="card span-6">${cardHead('router', 'Ağlar')}<div class="segment-list">${(
+    return `${pageHead('Genel bakış', esc(state.overview?.hostname || 'Ağınız'), esc(state.overview?.model || 'Router durumu ve bağlı cihazlar'))}${off ? offloadAlert() : ''}<div class="grid">${internetCard()}<section class="card span-5">${cardHead('wifi', 'Wi-Fi', `<a href="#/wifi">Tüm ağlar →</a>`)}<div class="wifi-list">${wifiRows()}</div></section><section class="card span-6">${cardHead('router', 'Ağlar')}<div class="segment-list">${(
       state.networks.interfaces || []
     )
       .filter((n) => !n.isWan)
@@ -311,7 +375,7 @@
       )
       .join(
         '',
-      )}</div></section><section class="card span-6">${cardHead('devices', 'Cihazlar', `<a href="#/devices">Tüm cihazlar →</a>`)}<div class="device-topline"><strong>${online.length}</strong><span>çevrimiçi / ${total} kayıtlı</span></div><div class="traffic-devices">${top.map((c) => `<div class="traffic-device"><span class="traffic-device-name"><span class="type-icon tiny">${typeIcon(c.type)}</span>${esc(c.displayName)}</span><span class="traffic-device-speed">↓ ${esc(NP.fmt.bits(c.down))} · ↑ ${esc(NP.fmt.bits(c.up))}</span><div class="mini-track"><i style="width:${Math.max(3, Math.min(100, ((c.down + c.up) / (top[0]?.down + top[0]?.up || 1)) * 100))}%"></i></div></div>`).join('') || '<div class="empty">Çevrimiçi cihaz yok.</div>'}</div></section><section class="card span-12">${cardHead('system', 'Sistem', `<a href="#/system">Sistem bilgileri →</a>`)}<div class="system-stats"><div><span class="metric-label">Çalışma süresi</span><strong>${fmtUptime(state.overview?.uptime)}</strong></div><div><span class="metric-label">CPU yükü · 1 dk</span><strong>${esc(state.overview?.load?.[0] ?? '—')}</strong></div><div><span class="metric-label">Bellek · ${state.overview?.memory?.percent || 0}%</span><strong>${esc(NP.fmt.bytes(state.overview?.memory?.used || 0))} / ${esc(NP.fmt.bytes(state.overview?.memory?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.overview?.memory?.percent || 0)}%"></i></div></div><div><span class="metric-label">CPU</span><strong>${state.system?.cpuEstimated ? '~' : ''}%${esc(state.system?.cpu ?? '—')}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.cpu || 0)}%"></i></div></div><div><span class="metric-label">Disk · ${esc(state.system?.disk?.percent ?? 0)}%</span><strong>${esc(NP.fmt.bytes(state.system?.disk?.used || 0))} / ${esc(NP.fmt.bytes(state.system?.disk?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.disk?.percent || 0)}%"></i></div></div><div><span class="metric-label">Firmware</span><strong>${esc(state.overview?.firmware || '—')}</strong></div></div></section></div>`;
+      )}</div></section><section class="card span-6">${cardHead('devices', 'Cihazlar', `<a href="#/devices">Tüm cihazlar →</a>`)}<div class="device-topline"><strong>${online.length}</strong><span>çevrimiçi / ${total} kayıtlı</span></div><div class="traffic-devices">${top.map((c) => `<div class="traffic-device"><span class="traffic-device-name"><span class="type-icon tiny">${typeIcon(c.type)}</span>${esc(c.displayName)}</span><span class="traffic-device-speed">↓ ${esc(NP.fmt.bits(c.down))} · ↑ ${esc(NP.fmt.bits(c.up))}</span><div class="mini-track"><i style="width:${Math.max(3, Math.min(100, ((c.down + c.up) / (top[0]?.down + top[0]?.up || 1)) * 100))}%"></i></div></div>`).join('') || '<div class="empty">Çevrimiçi cihaz yok.</div>'}</div></section>${portsCard()}<section class="card span-12">${cardHead('system', 'Sistem', `<a href="#/system">Sistem bilgileri →</a>`)}<div class="system-stats"><div><span class="metric-label">Çalışma süresi</span><strong>${fmtUptime(state.overview?.uptime)}</strong></div><div><span class="metric-label">CPU yükü · 1 dk</span><strong>${esc(state.overview?.load?.[0] ?? '—')}</strong></div><div><span class="metric-label">Bellek · ${state.overview?.memory?.percent || 0}%</span><strong>${esc(NP.fmt.bytes(state.overview?.memory?.used || 0))} / ${esc(NP.fmt.bytes(state.overview?.memory?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.overview?.memory?.percent || 0)}%"></i></div></div><div><span class="metric-label">CPU</span><strong>${state.system?.cpuEstimated ? '~' : ''}%${esc(state.system?.cpu ?? '—')}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.cpu || 0)}%"></i></div></div><div><span class="metric-label">Disk · ${esc(state.system?.disk?.percent ?? 0)}%</span><strong>${esc(NP.fmt.bytes(state.system?.disk?.used || 0))} / ${esc(NP.fmt.bytes(state.system?.disk?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.disk?.percent || 0)}%"></i></div></div><div><span class="metric-label">Firmware</span><strong>${esc(state.overview?.firmware || '—')}</strong></div></div></section></div>`;
   }
   const findIface = (c) =>
     state.networks.interfaces.find((n) => n.name === c.iface) ||
@@ -1560,7 +1624,7 @@
     if (!s) return '<div class="empty">Yükleniyor…</div>';
     if (!state.xTz && !state.xTzError) loadX('xTz', () => NP.getTimezone(), '/welcome');
     let step = state.wizStep || (s.rootPwEmpty ? 1 : 2);
-    let steps = ['Şifre', 'Saat dilimi', 'Güncelleme', 'Hazır'];
+    let steps = ['Şifre', 'Saat dilimi', 'İnternet', 'Güncelleme', 'Hazır'];
     let bar = `<ol class="wiz-steps">${steps.map((t, i) => `<li class="${i + 1 < step ? 'done' : i + 1 === step ? 'on' : ''}"><i>${i + 1 < step ? '✓' : i + 1}</i>${t}</li>`).join('')}</ol>`;
     let body;
     if (step === 1)
@@ -1576,7 +1640,8 @@
           ? '<div class="empty">Yükleniyor…</div>'
           : `<div class="x-inline"><select class="field" id="wiz-tz">${NP.TIMEZONES.map((z) => `<option value="${z.id}"${(t.isUtc ? 'Europe/Istanbul' : t.zone) === z.id ? ' selected' : ''}>${esc(z.label)}</option>`).join('')}</select></div>`
       }<div class="x-form-foot"><button class="btn" type="button" data-wiz-back>Geri</button><button class="btn primary" type="button" data-wiz-tz>Devam</button></div>`;
-    } else if (step === 3)
+    } else if (step === 3) body = wizWanStep();
+    else if (step === 4)
       body = `<h2>Güncellemeler</h2><p>NetOS yeni sürümleri GitHub’dan alabilir. Otomatik güncelleme açıksa her gece kendisi kurar; ayarlarınız korunur.</p>
         <div class="toggle-line"><div><strong>Otomatik güncelle</strong><p>Önerilir. Kapalıyken yalnız bildirim gelir.</p></div><input class="switch" type="checkbox" id="wiz-auto" checked></div>
         <div class="x-form-foot"><button class="btn" type="button" data-wiz-back>Geri</button><button class="btn primary" type="button" data-wiz-upd>Devam</button></div>`;
@@ -1589,6 +1654,97 @@
     return `<div class="wiz"><div class="wiz-head">${brandMark}<div><div class="eyebrow">NetOS kurulumu</div><h1>Hoş geldiniz</h1></div></div>${bar}<section class="card wiz-card">${body}</section></div>`;
   }
 
+  /* ── İkinci internet hattı (sihirbaz + İnternet sayfası) ── */
+  function addWanFields(F) {
+    if (!state.xPorts && !state.xPortsError && !state.xLoading?.xPorts) loadX('xPortsRaw', async () => setPorts(await NP.getPorts()), state.page);
+    let free = (state.xPorts?.ports || []).filter((p) => p.role === 'free').sort((a, b) => b.link - a.link),
+      wans = wanList(),
+      f = F || {};
+    if (!state.xPorts) return '<div class="empty">Portlar okunuyor…</div>';
+    if (!free.length)
+      return '<div class="alert">Boş ethernet portu yok. İkinci modemi bağlamak için router’da kullanılmayan bir port gerekir. Bir LAN portunu ayırmak için LuCI > Ağ > Arayüzler > Cihazlar bölümünden br-lan köprüsünden bir portu çıkarın.</div>';
+    let proto = f.proto || 'dhcp';
+    return `<div class="x-form wan-add">
+      <div class="field-wrap"><label>İkinci modemin takılı olduğu port</label><select class="field" name="device">${free
+        .map((p) => `<option value="${esc(p.name)}"${f.device === p.name ? ' selected' : ''}>${esc(p.name)} · ${p.link ? 'kablo takılı' + (p.speed ? ' · ' + portSpeed(p.speed) : '') : 'kablo yok'}</option>`)
+        .join('')}</select></div>
+      <div class="field-wrap"><label>Bağlantı tipi</label><select class="field" name="proto" data-wan-proto><option value="dhcp"${proto === 'dhcp' ? ' selected' : ''}>Modem router modunda (otomatik IP, önerilen)</option><option value="pppoe"${proto === 'pppoe' ? ' selected' : ''}>PPPoE (operatör kullanıcı adı ve şifresi)</option></select></div>
+      ${proto === 'pppoe' ? `<div class="field-wrap"><label>PPPoE kullanıcı adı</label><input class="field" name="username" autocomplete="off" value="${esc(f.username || '')}"></div><div class="field-wrap"><label>PPPoE şifresi</label><input class="field" name="password" type="password" autocomplete="new-password"></div><div class="field-wrap"><label>VLAN (gerekmiyorsa boş)</label><input class="field num" name="vlan" type="number" min="0" max="4094" placeholder="ör. 35" value="${esc(f.vlan || '')}"></div>` : ''}
+      <div class="field-wrap"><label>İki hat nasıl çalışsın?</label><div class="mode-options two">${[
+        ['failover', 'Yedek hat', 'Ana hat koparsa internet otomatik ikinci hatta geçer.'],
+        ['balanced', 'Birlikte kullan', 'Trafik iki hatta paylaştırılır; toplam hız artar.'],
+      ]
+        .map(([v, t, d]) => `<label class="mode-option${(f.mode || 'failover') === v ? ' active' : ''}"><input type="radio" name="mode" value="${v}"${(f.mode || 'failover') === v ? ' checked' : ''}><span><strong>${t}</strong><small>${d}</small></span></label>`)
+        .join('')}</div></div>
+      ${wans.length > 1 ? `<div class="field-wrap"><label>Ana hat</label><select class="field" name="primary">${wans.map((w) => `<option value="${esc(w.name)}">${esc(w.label || w.name)}</option>`).join('')}</select></div>` : ''}
+    </div>`;
+  }
+  function addWanCard() {
+    let c = state.wanConfig || {};
+    return `<section class="card">${cardHead('globe', 'İkinci internet hattı')}<p class="subtitle">Tek hattınız var. İkinci bir modeminiz (ör. yedek fiber, ADSL ya da 4G/5G modem) varsa router’ın boş bir portuna takıp buradan ekleyebilirsiniz.</p>${
+      !c.mwan3 ? pkgGate('mwan3', 'Çoklu internet hattı (mwan3)', '~100 KB') : `<form id="wan-add-form">${addWanFields(state.wanAddF)}<div class="form-error" id="wan-add-error"></div><button class="btn primary" type="submit">Hattı ekle</button></form>`
+    }</section>`;
+  }
+  function wizWanStep() {
+    let c = state.wanConfig;
+    if (!c) {
+      if (!state.xLoading?.wanCfg) loadX('wanCfgTmp', async () => (state.wanConfig = await NP.getWanConfig()), '/welcome');
+      return '<div class="empty">Yükleniyor…</div>';
+    }
+    let wans = wanList(),
+      n = state.wizWan || (wans.length >= 2 ? 2 : 1),
+      opt = (v, t, d) => `<label class="mode-option${n === v ? ' active' : ''}"><input type="radio" name="wizwan" value="${v}"${n === v ? ' checked' : ''}><span><strong>${t}</strong><small>${d}</small></span></label>`;
+    let extra = '';
+    if (n === 1 && wans.length >= 2)
+      extra = `<p>Şu an ${wans.length} hat tanımlı. Hangisi kullanılsın?</p><div class="field-wrap"><select class="field" id="wiz-primary">${wans.map((w) => `<option value="${esc(w.name)}"${c.primary === w.name ? ' selected' : ''}>${esc(w.label || w.name)}</option>`).join('')}</select></div>`;
+    else if (n === 1) extra = `<p class="field-hint">Hattınız: <b>${esc(wans[0]?.label || wans[0]?.name || 'WAN')}</b>. İnternet ayarlarını (PPPoE vb.) daha sonra İnternet sayfasından değiştirebilirsiniz.</p>`;
+    else if (wans.length >= 2) {
+      let m = c.mode === 'single' || c.mode === 'custom' ? 'failover' : c.mode;
+      extra = `<p>İki hattınız zaten tanımlı (${wans.map((w) => esc(w.label || w.name)).join(', ')}). Nasıl çalışsınlar?</p><div class="mode-options two">${[
+        ['failover', 'Yedek hat', 'Ana hat koparsa internet otomatik diğer hatta geçer.'],
+        ['balanced', 'Birlikte kullan', 'Trafik iki hatta paylaştırılır.'],
+      ]
+        .map(([v, t, d]) => `<label class="mode-option${m === v ? ' active' : ''}"><input type="radio" name="wizmode" value="${v}"${m === v ? ' checked' : ''}><span><strong>${t}</strong><small>${d}</small></span></label>`)
+        .join('')}</div><div class="field-wrap"><label>Ana hat</label><select class="field" id="wiz-primary">${wans.map((w) => `<option value="${esc(w.name)}"${c.primary === w.name ? ' selected' : ''}>${esc(w.label || w.name)}</option>`).join('')}</select></div>`;
+    } else extra = !c.mwan3 ? pkgGate('mwan3', 'İki internet hattı (mwan3)', '~100 KB') : `<form id="wiz-wan-form">${addWanFields(state.wanAddF)}</form>`;
+    return `<h2>İnternet hatları</h2><p>Router’a kaç ayrı internet bağlantısı geliyor?</p><div class="mode-options two">${opt(1, 'Tek internet', 'Tüm trafik tek hattan gider. Çoğu ev için doğru seçim.')}${opt(2, 'İki internet', 'İkinci bir modem (yedek fiber, ADSL, 4G/5G) router’ın başka bir portuna bağlı.')}</div>${extra}<div class="form-error" id="wiz-error"></div><div class="x-form-foot"><button class="btn" type="button" data-wiz-back>Geri</button><button class="btn primary" type="button" data-wiz-wan>Devam</button></div>`;
+  }
+  const readAddWan = (form) => {
+    let el = form.elements;
+    return { device: el.device?.value, proto: el.proto?.value, username: el.username?.value.trim(), password: el.password?.value, vlan: el.vlan?.value, mode: form.querySelector('[name=mode]:checked')?.value || 'failover', primary: el.primary?.value };
+  };
+  root.addEventListener('change', (e) => {
+    let t = e.target;
+    if (t.matches('[name=wizwan]')) {
+      state.wizWan = Number(t.value);
+      return render();
+    }
+    if (t.matches('[data-wan-proto]')) {
+      let f = t.closest('form');
+      state.wanAddF = { ...readAddWan(f), password: '' };
+      return render();
+    }
+    if (t.matches('.wan-add [name=mode], [name=wizmode]')) t.closest('.mode-options').querySelectorAll('.mode-option').forEach((l) => l.classList.toggle('active', l.contains(t)));
+  });
+  root.addEventListener('submit', async (e) => {
+    let f = e.target;
+    if (f.id !== 'wan-add-form') return;
+    e.preventDefault();
+    let btn = f.querySelector('[type=submit]'),
+      done = xBusy(btn, 'Ekleniyor…'),
+      er = document.getElementById('wan-add-error');
+    try {
+      let r = await NP.addWan(readAddWan(f));
+      state.wanAddF = null;
+      toast(`${r.name} eklendi; bağlantıyı kontrol edip onaylayın`);
+      state.wanConfig = await NP.getWanConfig();
+      state.xPorts = null;
+      render();
+    } catch (x) {
+      if (er) er.textContent = x.message;
+      done();
+    }
+  });
   function wanList() {
     return state.wanConfig?.wans || [];
   }
@@ -1613,8 +1769,7 @@
   function wanModeCard() {
     let c = state.wanConfig || {},
       w = wanList();
-    if (c.mwan3 === false)
-      return `<section class="card">${cardHead('globe', 'Çoklu WAN modu')}<p class="subtitle">Çoklu WAN için mwan3 kurulu değil.</p></section>`;
+    if (c.mwan3 === false || w.length < 2) return addWanCard();
     let mode = c.mode === 'custom' ? 'balanced' : c.mode || 'balanced';
     return `<section class="card">${cardHead('globe', 'Çoklu WAN modu')}${c.mode === 'custom' ? '<div class="alert">Bu ayarlar LuCI\'de özelleştirilmiş; burada kaydetmek NetOS politikasına çevirir.</div>' : ''}<form id="wan-mode-form"><div class="mode-options">${[
       ['balanced', 'Yük dengeleme', 'İki hat birlikte çalışır; trafik hatların ağırlığına göre dağılır.'],
@@ -2205,6 +2360,7 @@
       if (!NP.hasSession()) return;
       try {
         const [o, n, s] = await Promise.all([NP.getOverview(), NP.getNetworks(), NP.getStatus()]);
+        if (state.page === '/' && state.xPorts) NP.getPorts().then(setPorts).catch(() => {});
         const previous = state.overview?.wans || [];
         state.overview = o;
         state.networks = n;
@@ -2387,6 +2543,14 @@
       }
       return;
     }
+    if (b.matches('[data-keep-offload]')) {
+      try {
+        localStorage.setItem('np_offload_ok', '1');
+      } catch (_) {}
+      toast('Uyarı gizlendi. Sistem > Gelişmiş bölümünden değiştirebilirsiniz.');
+      render();
+      return;
+    }
     if (b.matches('[data-dismiss-alert]')) {
       state.alertOff = true;
       render();
@@ -2453,7 +2617,7 @@
       if (box) box.hidden = el.checked;
       return;
     }
-    if (el.matches('[name=proto]')) {
+    if (el.matches('[name=proto]') && document.querySelector('.wan-pppoe')) {
       document.querySelector('.wan-pppoe').hidden = el.value !== 'pppoe';
       document.querySelector('.wan-static').hidden = el.value !== 'static';
       return;
@@ -2907,11 +3071,12 @@
       return;
     }
     if (b.matches('[data-disable-offload]')) {
-      if (!confirm('Flow offloading kapatılacak. CPU kullanımı biraz artabilir. Devam edilsin mi?')) return;
+      if (!confirm('Flow offloading kapatılacak. İşlemci kullanımı biraz artabilir; cihaz hızları ve hız sınırları tam çalışır. Devam edilsin mi?')) return;
       try {
         await NP.setOffload(false);
         state.status.offload = false;
-        state.sqm = await NP.getSqm();
+        toast('Flow offloading kapatıldı');
+        state.sqm = await NP.getSqm().catch(() => state.sqm);
         render();
       } catch (err) {
         toast(err.message);
@@ -3537,6 +3702,7 @@
         render();
         pollPkg(d.pkg, () => {
           state.xPf = state.xVpn = null;
+          if (d.pkg === 'mwan3') NP.getWanConfig().then((c) => ((state.wanConfig = c), render())).catch(() => {});
           render();
         });
       } catch (x) {
@@ -4043,7 +4209,7 @@
     }
   });
   root.addEventListener('click', async (e) => {
-    let b = e.target.closest('[data-log-level],[data-log-dl],[data-wiz-next],[data-wiz-back],[data-wiz-tz],[data-wiz-upd],[data-wiz-finish]');
+    let b = e.target.closest('[data-log-level],[data-log-dl],[data-wiz-next],[data-wiz-back],[data-wiz-tz],[data-wiz-wan],[data-wiz-upd],[data-wiz-finish]');
     if (!b) return;
     let d = b.dataset;
     if (d.logLevel != null) {
@@ -4080,11 +4246,51 @@
       }
       return done();
     }
+    if (b.matches('[data-wiz-wan]')) {
+      let c = state.wanConfig || {},
+        wans = wanList(),
+        n = state.wizWan || (wans.length >= 2 ? 2 : 1),
+        er = document.getElementById('wiz-error'),
+        done = xBusy(b, 'Uygulanıyor…'),
+        pr = document.getElementById('wiz-primary')?.value;
+      try {
+        let changed = false;
+        if (n === 1 && wans.length >= 2 && (c.mode !== 'single' || c.primary !== pr)) {
+          await NP.setWanMode('single', pr);
+          changed = true;
+        } else if (n === 2 && wans.length >= 2) {
+          let m = document.querySelector('[name=wizmode]:checked')?.value || 'failover';
+          if (m !== c.mode || pr !== c.primary) {
+            await NP.setWanMode(m, pr);
+            changed = true;
+          }
+        } else if (n === 2) {
+          let f = document.getElementById('wiz-wan-form');
+          if (!f) throw new Error(c.mwan3 ? 'Boş bir port gerekli' : 'Önce mwan3 paketini kurun');
+          let r = await NP.addWan(readAddWan(f));
+          state.wanAddF = null;
+          state.xPorts = null;
+          toast(`${r.name} eklendi`);
+          changed = true;
+        }
+        // yerel ağdan bağlıyız; panel yanıt veriyorsa değişikliği onayla (geri alma iptal)
+        if (changed) {
+          await new Promise((res) => setTimeout(res, 2500));
+          await NP.confirmWan();
+          state.wanConfig = await NP.getWanConfig();
+        }
+        return go(4);
+      } catch (x) {
+        if (er) er.textContent = x.message;
+        else toast(x.message);
+      }
+      return done();
+    }
     if (b.matches('[data-wiz-upd]')) {
       try {
         await NP.setAutoUpdate(document.getElementById('wiz-auto').checked);
       } catch (_) {}
-      return go(4);
+      return go(5);
     }
     if (b.matches('[data-wiz-finish]')) {
       try {

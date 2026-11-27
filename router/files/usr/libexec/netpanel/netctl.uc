@@ -442,9 +442,9 @@ function qr() {
 }
 
 // ══ Paket kurulumu (yalnız izinli listeler) ══
-const PKGS = { https: ['px5g-mbedtls'], adguard: ['adguardhome'], upnp: ['miniupnpd-nftables'], wireguard: ['wireguard-tools', 'kmod-wireguard'], qr: ['qrencode'], wol: ['etherwake'] };
+const PKGS = { https: ['px5g-mbedtls'], adguard: ['adguardhome'], upnp: ['miniupnpd-nftables'], wireguard: ['wireguard-tools', 'kmod-wireguard'], qr: ['qrencode'], wol: ['etherwake'], mwan3: ['mwan3', 'luci-app-mwan3'] };
 function pkgCheck(set) {
-	return { https: () => (has('/usr/bin/px5g') || has('/etc/uhttpd.crt')) && length(trim(sh('ls /usr/lib/libustream-ssl*.so* /lib/libustream-ssl*.so* 2>/dev/null'))) > 0, adguard: () => has('/usr/bin/AdGuardHome'), upnp: () => has('/usr/sbin/miniupnpd'), wireguard: wgInstalled, qr: () => has('/usr/bin/qrencode'), wol: () => has('/usr/sbin/etherwake') || has('/usr/bin/etherwake') }[set]();
+	return { https: () => (has('/usr/bin/px5g') || has('/etc/uhttpd.crt')) && length(trim(sh('ls /usr/lib/libustream-ssl*.so* /lib/libustream-ssl*.so* 2>/dev/null'))) > 0, adguard: () => has('/usr/bin/AdGuardHome'), upnp: () => has('/usr/sbin/miniupnpd'), wireguard: wgInstalled, qr: () => has('/usr/bin/qrencode'), wol: () => has('/usr/sbin/etherwake') || has('/usr/bin/etherwake'), mwan3: () => has('/etc/config/mwan3') }[set]();
 }
 function pkg_install() {
 	const a = input(), set = a.set;

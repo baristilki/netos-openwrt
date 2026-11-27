@@ -7,6 +7,8 @@
 #   wanctl.sh revert              -> yedeğe dön
 #   wanctl.sh reconnect < json    -> {name}  hattı yeniden bağla
 #   wanctl.sh events              -> JSON: hat olay geçmişi (en yeni önce)
+#   wanctl.sh ports               -> JSON: fiziksel portlar (bağlantı hızı, rol, sayaçlar)
+#   wanctl.sh add      < json     -> ikinci hat ekle {device, proto, username, password, vlan, mode, primary}
 #
 # Değişiklikler "geri alma korumalı": network + mwan3 yedeklenir, ROLLBACK_SEC içinde confirm
 # gelmezse otomatik eski hale dönülür (LuCI'deki apply/rollback mantığı).
@@ -22,7 +24,7 @@ CONF=${NP_CONF:-/etc/config}
 svc() { [ -n "$NP_DRYRUN" ] && { echo "DRYRUN: $*" >&2; return 0; }; "$@" >/dev/null 2>&1; }
 
 err() {
-	uci -q revert network; uci -q revert mwan3
+	uci -q revert network; uci -q revert mwan3; uci -q revert firewall
 	printf '{"ok":false,"error":"%s"}\n' "$1"
 	exit 0
 }
@@ -35,6 +37,7 @@ rb_begin() {
 		mkdir -p "$RB"
 		cp "$CONF/network" "$RB/network"
 		[ -f "$CONF/mwan3" ] && cp "$CONF/mwan3" "$RB/mwan3"
+		cp "$CONF/firewall" "$RB/firewall"
 	fi
 	echo $(($(date +%s) + ROLLBACK_SEC)) >"$RB/until"
 	if [ ! -f "$RB/pid" ] || ! kill -0 "$(cat "$RB/pid")" 2>/dev/null; then
@@ -52,6 +55,7 @@ revert() {
 	[ -d "$RB" ] || { echo '{"ok":true}'; return; }
 	cp "$RB/network" "$CONF/network"
 	[ -f "$RB/mwan3" ] && cp "$RB/mwan3" "$CONF/mwan3"
+	[ -f "$RB/firewall" ] && cp "$RB/firewall" "$CONF/firewall" && svc /etc/init.d/firewall reload
 	rm -rf "$RB"
 	svc /etc/init.d/network reload
 	svc /etc/init.d/mwan3 restart
@@ -320,6 +324,146 @@ events() {
 	json_dump
 }
 
+
+# ── fiziksel portlar ────────────────────────────────────────────────────────
+SYSNET=${NP_SYSNET:-/sys/class/net}
+rd() { cat "$1" 2>/dev/null | head -1; }
+# portu kullanan ağ arayüzleri (doğrudan ya da VLAN/PPPoE üzerinden)
+port_nets() {
+	local p=$1 n d sec base
+	for n in $(uci -q show network | sed -n "s/^network\.\([^.]*\)=interface$/\1/p"); do
+		[ "$n" = loopback ] && continue
+		d=$(uci -q get "network.$n.device"); [ -n "$d" ] || continue
+		base=$d
+		sec=$(dev_section "$d")
+		[ -n "$sec" ] && [ "$(uci -q get "network.$sec.type")" = 8021q ] && base=$(uci -q get "network.$sec.ifname")
+		[ "$base" = "$p" ] && echo "$n"
+	done
+}
+port_bridge() {
+	local p=$1 s
+	[ -L "$SYSNET/$p/master" ] && { basename "$(readlink "$SYSNET/$p/master")"; return; }
+	for s in $(uci -q show network | sed -n "s/^network\.\([^.]*\)\.type='bridge'$/\1/p"); do
+		uci -q get "network.$s.ports" | tr ' ' '\n' | grep -qx "$p" && { uci -q get "network.$s.name"; return; }
+	done
+}
+max_mode() { # ethtool desteklenen en yüksek hız (Mbit)
+	command -v ethtool >/dev/null || return 0
+	ethtool "$1" 2>/dev/null | sed -n '/Supported link modes:/,/Supported pause/p' | grep -oE '[0-9]+base' | tr -d 'base' | sort -n | tail -1
+}
+ports() {
+	local i p drv sp dup car wan n role nets mx fl
+	wan=$(np_wan_nets)
+	json_init
+	json_add_array ports
+	for i in "$SYSNET"/*; do
+		p=${i##*/}
+		[ -e "$i/device" ] || continue
+		[ -d "$i/wireless" ] || [ -e "$i/phy80211" ] && continue
+		[ -d "$i/dsa" ] && continue # DSA ana bağlantısı (switch'in CPU portu)
+		drv=$(basename "$(readlink "$i/device/driver" 2>/dev/null)")
+		sp=$(rd "$i/speed"); case "$sp" in '' | -* | *[!0-9]*) sp=0 ;; esac
+		dup=$(rd "$i/duplex"); car=$(rd "$i/carrier")
+		nets=$(port_nets "$p")
+		role=free
+		for n in $nets; do echo "$wan" | grep -qx "$n" && role=wan; done
+		[ "$role" = free ] && [ -n "$(port_bridge "$p")" ] && role=lan
+		[ "$role" = free ] && [ -n "$nets" ] && role=other
+		json_add_object
+		json_add_string name "$p"
+		json_add_string label "$(rd "$i/phys_port_name")"
+		json_add_string mac "$(rd "$i/address")"
+		json_add_string driver "$drv"
+		json_add_boolean virtual "$(case "$drv" in virtio* | vmxnet* | hv_netvsc | xen*) echo 1 ;; *) echo 0 ;; esac)"
+		json_add_boolean link "$([ "$car" = 1 ] && echo 1 || echo 0)"
+		json_add_int speed "$sp"
+		mx=$(max_mode "$p"); fl=$(rd "$i/carrier_down_count")
+		json_add_int max_speed "${mx:-0}"
+		json_add_string duplex "$dup"
+		json_add_int flaps "${fl:-0}"
+		json_add_string role "$role"
+		json_add_string bridge "$(port_bridge "$p")"
+		json_add_array nets
+		for n in $nets; do json_add_string "" "$n"; done
+		json_close_array
+		json_add_string rx "$(rd "$i/statistics/rx_bytes")"
+		json_add_string tx "$(rd "$i/statistics/tx_bytes")"
+		json_close_object
+	done
+	json_close_array
+	json_add_int t "$(date +%s)"
+	json_dump
+}
+
+# ── ikinci hat ekleme ───────────────────────────────────────────────────────
+# < {device, proto: dhcp|pppoe, username, password, vlan, mode: failover|balanced, primary}
+mwan_iface() { # mwan3'te yoksa izlemeli arayüz ekle
+	[ "$(uci -q get "mwan3.$1")" = interface ] && return
+	uci set "mwan3.$1=interface"
+	uci set "mwan3.$1.enabled=1"
+	uci set "mwan3.$1.family=ipv4"
+	uci add_list "mwan3.$1.track_ip=1.1.1.1"
+	uci add_list "mwan3.$1.track_ip=8.8.8.8"
+	uci set "mwan3.$1.reliability=1"
+}
+add_wan() {
+	local input dev proto user pass vlan mode primary n i z m metric d
+	input=$(cat)
+	json_load "$input" 2>/dev/null || err "Geçersiz istek"
+	[ -f "$CONF/mwan3" ] || err "Önce mwan3 paketini kurun"
+	json_get_var dev device; json_get_var proto proto; json_get_var vlan vlan
+	json_get_var mode mode; json_get_var primary primary
+	case "$dev" in '' | *[!A-Za-z0-9_.-]*) err "Port seçilmeli" ;; esac
+	[ -e "$SYSNET/$dev/device" ] || err "Port bulunamadı"
+	[ -z "$(port_nets "$dev")" ] && [ -z "$(port_bridge "$dev")" ] || err "Bu port kullanımda; boş bir port seçin"
+	case "$proto" in dhcp | pppoe) ;; *) err "Bağlantı tipi DHCP ya da PPPoE olmalı" ;; esac
+	case "$mode" in failover | balanced) ;; *) mode=failover ;; esac
+	case "${vlan:-0}" in *[!0-9]*) err "VLAN sayı olmalı" ;; esac
+	[ "${vlan:-0}" -le 4094 ] || err "VLAN 0-4094 arası olmalı"
+
+	i=2; while [ -n "$(uci -q get "network.wan$i")" ]; do i=$((i + 1)); done
+	n="wan$i"
+	d=$dev
+	if [ "${vlan:-0}" -gt 0 ]; then
+		d="$dev.$vlan"
+		if [ -z "$(dev_section "$d")" ]; then
+			m=$(uci add network device)
+			uci set "network.$m.type=8021q"; uci set "network.$m.ifname=$dev"
+			uci set "network.$m.vid=$vlan"; uci set "network.$m.name=$d"
+		fi
+	fi
+	uci set "network.$n=interface"
+	uci set "network.$n.proto=$proto"
+	uci set "network.$n.device=$d"
+	if [ "$proto" = pppoe ]; then
+		json_get_var user username; json_get_var pass password
+		user=$(printf '%s' "$user" | tr -d '\000-\037'); pass=$(printf '%s' "$pass" | tr -d '\000-\037')
+		[ -n "$user" ] && [ -n "$pass" ] || err "PPPoE kullanıcı adı ve şifresi gerekli"
+		uci set "network.$n.username=$user"; uci set "network.$n.password=$pass"
+	fi
+	# mwan3 her hat için farklı metric ister
+	metric=10
+	for m in $(np_wan_nets); do
+		z=$(uci -q get "network.$m.metric"); [ -n "$z" ] && [ "$z" -ge "$metric" ] && metric=$((z + 10))
+	done
+	uci set "network.$n.metric=$metric"
+
+	z=$(uci -q show firewall | sed -n "s/^firewall\.\(@zone\[[0-9]*\]\)\.name='wan'$/\1/p" | head -1)
+	[ -n "$z" ] || err "Güvenlik duvarında wan bölgesi yok"
+	uci add_list "firewall.$z.network=$n"
+
+	for m in $(np_wan_nets) $n; do mwan_iface "$m"; done
+	[ -n "$primary" ] && is_wan "$primary" || primary=$(np_wan_nets | head -1)
+
+	rb_begin
+	uci commit network; uci commit firewall; uci commit mwan3
+	svc /etc/init.d/network reload
+	svc /etc/init.d/firewall reload
+	log_event "$n" "added:$dev"
+	printf '{"mode":"%s","primary":"%s"}' "$mode" "$primary" | NP_NO_RB_MSG=1 set_mode >/dev/null
+	printf '{"ok":true,"name":"%s","pending_until":%s}\n' "$n" "$(cat "$RB/until")"
+}
+
 case "$1" in
 config) config ;;
 set) set_wan ;;
@@ -328,5 +472,7 @@ confirm) confirm ;;
 revert) revert ;;
 reconnect) reconnect ;;
 events) events ;;
-*) echo "kullanım: $0 config|set|mode|confirm|revert|reconnect|events" >&2; exit 1 ;;
+ports) ports ;;
+add) add_wan ;;
+*) echo "kullanım: $0 config|set|mode|confirm|revert|reconnect|events|ports|add" >&2; exit 1 ;;
 esac
