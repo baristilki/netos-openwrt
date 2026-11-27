@@ -443,35 +443,30 @@ wifi_set() {
 
 # Çevredeki ağları tara (Huawei'nin tekrarlayıcı taraması); alan adları modele göre değişebildiği için esnek okunur
 wifi_scan() {
-	local r keys k ch sig ssid fb
+	local r n i ch ws img sig ssid
 	api_get ntwk/wifiscan >/dev/null 2>&1
-	sleep "${NP_HW_SCAN_WAIT:-6}"
-	r=$(api_get ntwk/wifiscanresult) || { printf '{"ok":false,"error":"%s"}\n' "$(cat "$D/err" 2>/dev/null | tr -d '"\\')"; return; }
-	json_init
-	json_load "{\"h\":$r}" 2>/dev/null || { echo '{"ok":false,"error":"Tarama sonucu okunamadı"}'; return; }
-	json_select h 2>/dev/null || { echo '{"ok":true,"networks":[]}'; return; }
-	json_get_keys keys
-	tmp=$(mktemp)
-	for k in $keys; do
-		json_select "$k" 2>/dev/null || continue
-		ch=""; sig=""; ssid=""; fb=""
-		for f in Channel channel; do [ -n "$ch" ] || json_get_var ch "$f"; done
-		for f in RSSI Rssi rssi SignalStrength Signal SignalQuality; do [ -n "$sig" ] || json_get_var sig "$f"; done
-		for f in WifiSsid SSID Ssid; do [ -n "$ssid" ] || json_get_var ssid "$f"; done
-		for f in FrequencyBand Band; do [ -n "$fb" ] || json_get_var fb "$f"; done
-		json_select ..
-		printf '%s\t%s\t%s\t%s\n' "$ch" "$sig" "$fb" "$(printf '%s' "$ssid" | tr -d '\t\n')" >>"$tmp"
-	done
+	sleep "${NP_HW_SCAN_WAIT:-8}"
+	r=$(api_get ntwk/wifiscanresult) || { printf '{"ok":false,"error":"%s"}\n' "$(cat "$D/err" 2>/dev/null | tr -d '"\')"; return; }
+	# yanıt üst düzey bir dizi: [{Channel, WifiSsid, WifiSignal (pozitif dBm: 24 = -24 dBm), Signalimg (.../signal_05.gif, 5 = en güçlü)}]
+	n=$(printf '%s' "$r" | jsonfilter -e '@[*].Channel' 2>/dev/null | wc -l)
 	json_init
 	json_add_boolean ok 1
 	json_add_array networks
-	while IFS='	' read -r ch sig fb ssid; do
+	i=0
+	while [ "$i" -lt "$n" ]; do
+		ch=$(jget "$r" "@[$i].Channel"); ws=$(jget "$r" "@[$i].WifiSignal"); ssid=$(jget "$r" "@[$i].WifiSsid")
+		img=$(jget "$r" "@[$i].Signalimg" | sed -n 's/.*signal_0*\([0-9]\)\.gif.*/\1/p')
+		case "$ws" in '' | 0 | *[!0-9]*) sig="" ;; *) sig="-$ws" ;; esac
+		# WifiSignal yoksa simge seviyesinden kaba dBm (1..5 -> -85..-45)
+		[ -n "$sig" ] || case "$img" in [1-5]) sig=$((-95 + img * 10)) ;; esac
 		json_add_object
-		json_add_string channel "$ch"; json_add_string signal "$sig"; json_add_string band "$fb"; json_add_string ssid "$ssid"
+		json_add_string channel "$ch"; json_add_string signal "$sig"
+		json_add_string band "$([ "${ch:-0}" -gt 14 ] 2>/dev/null && echo 5GHz || echo 2.4GHz)"
+		json_add_string ssid "$ssid"
 		json_close_object
-	done <"$tmp"
+		i=$((i + 1))
+	done
 	json_close_array
-	rm -f "$tmp"
 	json_dump
 }
 
@@ -505,7 +500,11 @@ guest_get() {
 	json_add_int valid "$(jget "$g" '@[0].ValidTime' || echo 3)"
 	json_add_int rest "$(jget "$g" '@[0].RestTime' | tr -cd 0-9)"
 	key=$(jget "$g" '@[0].WpaPreSharedKey')
-	[ $pw = 1 ] && [ $sec = 1 ] && case "$key" in '' | '********') ;; *) json_add_string password "$key" ;; esac
+	if [ $pw = 1 ] && [ $sec = 1 ]; then
+		# Huawei misafir şifresini geri vermez ("********"): NetOS'tan konduysa saklanan kopya kullanılır
+		case "$key" in '' | *'*'*) key=$(cfg guest_password) ;; esac
+		[ -n "$key" ] && json_add_string password "$key"
+	fi
 	json_add_boolean limit "$(boolv "$(jget "$l" '@.Enable')")"
 	json_add_int limit_mbps "$(( $(jget "$l" '@.X_DownPeakRate' | tr -cd 0-9 || echo 0) / 1000 ))"
 	json_dump
@@ -567,6 +566,9 @@ guest_set() {
 		[ "$(jget "$r" '@.parameter')" = parameter.err ] && e="Huawei değerleri kabul etmedi (şifre biçimi?)"
 		hw_fail "$e"; return
 	fi
+	# QR paylaşımı için şifreyi sakla (yalnız root okuyabilir: /etc/config/netpanel 600)
+	if [ $sec = 1 ] && [ -n "$pw" ]; then uci set netpanel.huawei.guest_password="$pw"; uci commit netpanel
+	elif [ $sec = 0 ]; then uci -q delete netpanel.huawei.guest_password; uci commit netpanel; fi
 	if [ -n "$lim" ]; then
 		case "$mbps" in '' | *[!0-9]*) mbps=0 ;; esac
 		[ "$lim" = 1 ] && { [ "$mbps" -ge 1 ] && [ "$mbps" -le 1000 ] || { hw_fail "Hız sınırı 1-1000 Mbit/s olmalı (misafir ağı kaydedildi)"; return; }; }
