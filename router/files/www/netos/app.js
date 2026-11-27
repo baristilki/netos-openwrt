@@ -1816,6 +1816,36 @@
     if (!state.xSec?.rootPwEmpty || state.page === '/welcome' || !onceBanner('np_pw_banner')) return '';
     return `<div class="alert alert-strong pw-banner"><div><strong>Router’ın şifresi yok!</strong><span>Aynı ağdaki herkes bu panele, LuCI’ye ve SSH’a şifresiz girebilir.</span></div><a class="btn small primary" href="#/welcome">Şimdi şifre belirle</a><button class="btn small" type="button" data-banner-close="np_pw_banner">Sonra</button></div>`;
   }
+  /* Yerel sertifika otoritesi: tarayıcıların "güvenli değil" uyarısını kaldırır */
+  function sslBlock() {
+    if (!state.xSsl && !state.xSslError) loadX('xSsl', () => NP.getSsl(), '/system');
+    let x = state.xSsl;
+    if (state.xSslError) return `<p class="form-error">${esc(state.xSslError)}</p>`;
+    if (!x) return '';
+    let d = (t) => new Date(t).toLocaleDateString('tr-TR');
+    if (!x.ca || !x.byNetos)
+      return `<div class="ssl-box"><p>Tarayıcının “güvenli değil” uyarısını kaldırmak için NetOS kendi sertifika otoritesini oluşturup panele güvenilir bir sertifika kurabilir. Otorite yalnız yerel adreslere (192.168.x.x, .lan) sertifika verebilir.</p><button class="btn small primary" type="button" data-ssl-setup>Güvenilir sertifika oluştur</button></div>`;
+    return `<div class="ssl-box"><div class="sec-ok">✓ NetOS sertifikası kurulu · ${esc(d(x.certExpires))} tarihine kadar geçerli, kendiliğinden yenilenir</div>
+      <p class="field-hint">Uyarının kalkması için kök sertifikayı her cihaza <b>bir kez</b> yükleyin:</p>
+      <ul class="ssl-steps"><li><b>Windows:</b> dosyayı açın → Sertifika yükle → Geçerli kullanıcı → “Tüm sertifikaları aşağıdaki depolama alanına yerleştir” → <i>Güvenilen Kök Sertifika Yetkilileri</i>.</li>
+      <li><b>iPhone / iPad:</b> Safari ile indirin → Ayarlar &gt; İndirilen profil &gt; Yükle → sonra Genel &gt; Hakkında &gt; Sertifika Güven Ayarları’ndan açın.</li>
+      <li><b>Android:</b> Ayarlar &gt; Güvenlik &gt; Diğer güvenlik ayarları &gt; Sertifika yükle &gt; CA sertifikası.</li>
+      <li><b>Firefox:</b> kendi deposunu kullanır: Ayarlar &gt; Gizlilik ve Güvenlik &gt; Sertifikalar &gt; İçe aktar.</li></ul>
+      <div class="x-inline"><a class="btn small primary" href="http://${esc(location.hostname)}${esc(x.caUrl)}" download="NetOS-kok-sertifika.crt">Kök sertifikayı indir</a><button class="btn small" type="button" data-ssl-setup>Sertifikayı yenile</button></div></div>`;
+  }
+  document.addEventListener('click', async (e) => {
+    let b = e.target.closest('[data-ssl-setup]');
+    if (!b) return;
+    b.disabled = true;
+    b.textContent = 'Oluşturuluyor…';
+    try {
+      state.xSsl = await NP.setupSsl();
+      toast('Sertifika kuruldu. Web sunucusu yeniden başladı; sayfayı yenileyin.');
+    } catch (x) {
+      toast(x.message);
+    }
+    if (state.page === '/system') render();
+  });
   function securityCard() {
     let s = loadSec('/system');
     let body;
@@ -1826,6 +1856,7 @@
         <h3 class="x-sub">HTTPS (şifreli bağlantı)</h3>
         ${!s.httpsAvailable ? pkgGate('https', 'HTTPS', '~60 KB') : `<div class="toggle-line"><div><strong>Paneli her zaman HTTPS ile aç</strong><p>http:// adresleri https://’e yönlenir. Sertifika routerın kendisine ait olduğu için tarayıcı ilk girişte “güvenli değil” uyarısı gösterir; “Gelişmiş > Devam et” ile geçebilirsiniz.</p></div><input class="switch" type="checkbox" data-https${s.httpsRedirect ? ' checked' : ''}></div>
           <p class="field-hint">Şifreli adres: <a href="https://${esc(host)}/netos/">https://${esc(host)}/netos/</a></p>
+          ${sslBlock()}
           ${s.tunnelHttpHosts ? `<p class="field-hint warn-text">Cloudflare tünelindeki ${esc(s.tunnelHttpHosts)} panele http (80) üzerinden gidiyor; yönlendirme açılırsa döngüye girer. Tünel hedefini https://${esc(host)}:443 yapın.</p>` : ''}`}
         <h3 class="x-sub">Giriş koruması</h3>
         <p class="field-hint">15 dakika içinde 5 hatalı giriş denemesi yapan cihaz 5 dakika (tekrarında 15 ve 60 dakika) engellenir. NetOS, LuCI ve SSH girişleri birlikte sayılır; Telegram açıksa haber verilir.</p>

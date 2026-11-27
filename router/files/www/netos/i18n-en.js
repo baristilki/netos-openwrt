@@ -497,6 +497,13 @@ window.NETOS_EN = {
   "# ms": "# ms",
   "İşlemler": "Actions",
   "Yalnız yerel ağdaki cihazlara ping atılabilir": "Only devices on the local network can be pinged",
+  "Güvenilir sertifika oluştur": "Create trusted certificate",
+  "Kök sertifikayı indir": "Download root certificate",
+  "Sertifikayı yenile": "Renew certificate",
+  "Oluşturuluyor…": "Creating…",
+  "Uyarının kalkması için kök sertifikayı her cihaza": "To remove the warning, install the root certificate on each device",
+  "bir kez": "once",
+  "Sertifika kuruldu. Web sunucusu yeniden başladı; sayfayı yenileyin.": "Certificate installed. The web server restarted; reload the page.",
 };
 
 /* Parça çevirileri: tam eşleşme yoksa metnin içinde geçen bu parçalar değiştirilir (değişken içeren metinler için). Uzundan kısaya uygulanır. */

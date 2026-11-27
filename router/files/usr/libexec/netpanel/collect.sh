@@ -186,6 +186,8 @@ all)
 	/usr/libexec/netpanel/sysctl.sh check
 	/usr/libexec/netpanel/wanctl.sh rpf
 	/usr/libexec/netpanel/wanctl.sh devrules
+	# panel HTTPS sertifikası: günde bir kez (03:17) gerekirse yenile
+	[ "$(date +%H%M)" = 0317 ] && /usr/libexec/netpanel/sslctl.sh renew
 	/usr/libexec/netpanel/authguard.sh scan
 	usage
 	ping_hist

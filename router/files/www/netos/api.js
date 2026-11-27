@@ -889,6 +889,10 @@
     const r = await npCall('apps_heavy', {});
     return (r.items || []).map((x) => ({ ...x, since: (x.since || 0) * 1000 }));
   }
+  // yerel HTTPS sertifikası -> { ca, caExpires (ms), byNetos, certExpires (ms), names, caUrl }
+  const mapSsl = (r) => ({ ca: !!r.ca, caExpires: (r.ca_expires || 0) * 1000, byNetos: !!r.cert_by_netos, certExpires: (r.cert_expires || 0) * 1000, names: r.names || '', caUrl: r.ca_url || '/netos-ca.crt' });
+  async function getSsl() { return mapSsl(await npCall('ssl_status', {})); }
+  async function setupSsl() { return mapSsl(await npCall('ssl_setup', {})); }
   async function getUsage(days = 31) {
     const r = await npCall('usage_get', { days });
     const out = { days: [], devices: [], wan: {} };
@@ -1643,6 +1647,7 @@
         return r(1, 1) || r(21, 1) || r(1, 21) || (!f(0, 0) && !f(20, 0) && !f(0, 20) && x > 0 && y > 0 && x < 28 && y < 28 && ((x * 7 + y * 13 + x * y) % 5 < 2)) ? `<rect x="${x}" y="${y}" width="1" height="1"/>` : ''; }).join('') + '</svg>';
     const demoCf = { installed: true, enabled: true, token_set: true, token_valid: true, tunnel_id: 'a1b2c3d4-1111-2222-3333-444455556666',
       running: true, connections: 4, hosts: [{ hostname: 'ha.ornek.com', service: 'http://192.168.1.199:8123' }], curl: true };
+    const demoSsl = { ca: false, ca_expires: 0, cert_by_netos: false, cert_expires: nowSec() + 300 * 86400, names: 'DNS:OpenWrt', ca_url: '/netos-ca.crt' };
     const demoGuest = { enabled: true, ssid: 'Huawei-Misafir', secure: true, password: 'misafir2026', valid: 2, until: nowSec() + 15 * 3600 + 1200, limit: true, limit_mbps: 20 };
     const hwCfg = { dbho: false, bands: [
       { band: '2g', ssid: 'Huawei-EvAgi', enabled: true, security: '11i', encryption: 'AES', channel: '0', actual_channel: '6', hidden: false, standard: 'b/g/n/ax', bandwidth: '20_40' },
@@ -1859,6 +1864,8 @@
       },
       'netpanel.usage_get': (a) => ({ days: demoUsage.slice(0, a.days || 31) }),
       'netpanel.ping_host': (a) => (/\.(2|3|10)$/.test(a.ip) ? { ok: true, received: 3, avg_ms: 1 + (a.ip.length % 7) * 1.3 } : { ok: true, received: 0, avg_ms: null }),
+      'netpanel.ssl_status': () => ({ ok: true, ...demoSsl }),
+      'netpanel.ssl_setup': () => { Object.assign(demoSsl, { ca: true, ca_expires: nowSec() + 3650 * 86400, cert_by_netos: true, cert_expires: nowSec() + 397 * 86400, names: 'IPAddress:192.168.1.1 DNS:OpenWrt DNS:openwrt.lan' }); return { ok: true, ...demoSsl }; },
       'netpanel.apps_heavy': () => ({ items: [{ mac: '2c:f0:5d:11:22:12', name: 'DESKTOP-OYUN', kinds: ['upload'], since: nowSec() - 34 * 60, down: 3.1, up: 38.4, conns: 212, top: 'Web (diğer)' }] }),
       'netpanel.apps_get': (a) => {
         const G = 1e9, k = Math.min(a.days || 7, 30) / 7;
@@ -2102,7 +2109,7 @@
     getHuawei, setHuaweiWifi, setHuaweiConfig, getHuaweiWifi, saveHuaweiWifi, scanHuaweiChannels, WIFI_CHANNELS: CHANNELS,
     getWans: () => getWans(), getSystem, changePassword, scanWeb,
     getWanConfig, setWan, setWanMode, getPorts, addWan, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
-    getUsage, getApps, getHeavy, getPingHistory, pingHost, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
+    getUsage, getApps, getHeavy, getSsl, setupSsl, getPingHistory, pingHost, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
     getPortForwards, savePortForward, deletePortForward, setUpnp, setFirewall, getConnections, getLan, setLan, confirmLan, revertLan,
     getGuestWifi, setGuestWifi, extendGuestWifi, getGuestQr, getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,

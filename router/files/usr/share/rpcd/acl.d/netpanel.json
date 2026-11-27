@@ -42,7 +42,8 @@
 					"auth_list",
 					"hw_guest_get",
 					"ping_host",
-					"apps_heavy"
+					"apps_heavy",
+					"ssl_status"
 				],
 				"system": [
 					"board",
@@ -151,7 +152,8 @@
 					"auth_unban",
 					"hw_guest_set",
 					"hw_guest_extend",
-					"hw_guest_qr"
+					"hw_guest_qr",
+					"ssl_setup"
 				],
 				"system": [
 					"reboot"
