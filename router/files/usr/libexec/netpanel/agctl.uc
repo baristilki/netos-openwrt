@@ -58,6 +58,8 @@ function api(method, path, body, noauth) {
 	const he = match(err, /HTTP error ([0-9]+)/);
 	if (he) {
 		if (he[1] == '401' || he[1] == '403') return { ok: false, auth: true, error: 'AdGuard kullanıcı adı/şifresi hatalı' };
+		// 302 = giriş sayfasına yönlendirme: NetOS'a AdGuard hesabı hiç girilmemiş
+		if (he[1] == '302') return { ok: false, auth: true, error: ctx.get('netpanel', 'adguard', 'password') == null ? 'AdGuard bağlı değil: Entegrasyon > AdGuard Home bölümünden kullanıcı adı ve şifreyi girin' : 'AdGuard kullanıcı adı/şifresi hatalı' };
 		return { ok: false, error: 'AdGuard hata ' + he[1] + (length(trim(raw)) ? ': ' + substr(trim(raw), 0, 160) : '') };
 	}
 	if (!length(trim(raw)) && match(err, /Failed|refused|timed out|Connection reset/)) return { ok: false, error: 'AdGuard API yanıt vermedi' };
