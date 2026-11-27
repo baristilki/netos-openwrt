@@ -60,6 +60,7 @@ check() {
 # arka planda çalışan kurulum
 do_apply() {
 	local tag src
+	umask 022   # kurulan dosyalar uhttpd tarafından okunabilsin
 	echo running >"$ST"
 	: >"$LOG"
 	{

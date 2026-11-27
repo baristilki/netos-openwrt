@@ -2,6 +2,8 @@
 # NetOS kurulumu — router üzerinde çalıştırılır:  sh /tmp/netpanel/install.sh
 # (Panel > Sistem > Güncelleme de bu betiği GitHub sürümünden çalıştırır; ayarlar korunur.)
 set -e
+# Panelden/cron'dan güncellemede umask 077 olabiliyor: dosyalar yalnız root'a okunur olur, uhttpd 403 verir
+umask 022
 SRC=$(cd "$(dirname "$0")" && pwd)/files
 
 echo "[1/5] Dosyalar kopyalanıyor"
@@ -30,6 +32,9 @@ done
 chmod 755 /usr/libexec/rpcd/netpanel /usr/sbin/netpanel-apply /usr/libexec/netpanel/* /www/cgi-bin/netos-auth \
 	/etc/init.d/netpanel /etc/hotplug.d/dhcp/90-netpanel /etc/hotplug.d/iface/90-netpanel
 chmod 600 /etc/config/netpanel
+# web dosyaları herkese okunur olmalı (uhttpd), ACL/ortak dosyalar 644
+chmod -R a+rX /www/netos /www/netpanel
+chmod 644 /usr/share/rpcd/acl.d/netpanel.json /usr/share/netpanel/common.sh /usr/share/netpanel/version 2>/dev/null || true
 
 # Dakikalık toplayıcı: trafik istatistiği, ping geçmişi, saat planı (mevcut cron satırlarına dokunmadan ekle)
 CRON="* * * * * /usr/libexec/netpanel/collect.sh >/dev/null 2>&1"
