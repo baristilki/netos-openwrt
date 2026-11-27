@@ -101,7 +101,7 @@ Turn on what you need under NetOS → Integrations; disabled ones stay hidden in
 
 | Integration | What it does | Status |
 |---|---|---|
-| Huawei WiFi AX2 / WS5200 | Wi-Fi on/off, network name, password, channel, channel analysis, guest network | Ready (verified on AX2 + OpenWrt 25.12; changing the guest network not yet tested) |
+| Huawei WiFi AX2 / WS5200 | Wi-Fi on/off, network name, password, channel, channel analysis, guest network | Ready (verified on AX2 + OpenWrt 25.12) |
 | AdGuard Home | One-click install; network-wide ad blocking, per-device YouTube/TikTok blocking, safe search | Ready |
 | WireGuard VPN | VPN server, QR code per device | Ready |
 | Cloudflare Tunnel | Remote access without open ports, automatic DNS + Access setup | Ready |
