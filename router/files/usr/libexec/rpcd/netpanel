@@ -60,8 +60,10 @@ clients() {
 		n == 3 && p[3] == "mac" { gsub(q, "", v); mac[p[2]] = tolower(v) }
 		n == 3 && p[3] == "schedule" { gsub(q, "", v); sc[p[2]] = v }
 		n == 3 && p[3] == "presence" { gsub(q, "", v); if (v == "1") pr[p[2]] = 1 }
+		n == 3 && p[3] == "wan" { gsub(q, "", v); wn[p[2]] = v }
 		END { for (s in sc) if (mac[s] != "") printf "P\t%s\t%s\n", mac[s], sc[s]
-			for (s in pr) if (mac[s] != "") printf "R\t%s\n", mac[s] }' >>"$tmp"
+			for (s in pr) if (mac[s] != "") printf "R\t%s\n", mac[s]
+			for (s in wn) if (mac[s] != "") printf "L\t%s\t%s\n", mac[s], wn[s] }' >>"$tmp"
 	[ -f /tmp/netpanel-sched.now ] && awk 'NF { print "B\t" $1 }' /tmp/netpanel-sched.now >>"$tmp"
 	[ -f /tmp/netpanel-web.tsv ] && awk '{ print "U\t" $0 }' /tmp/netpanel-web.tsv >>"$tmp"
 	np_hosts | awk -F'\t' '{ printf "S\t%s\t%s\t%s\n", $2, $3, $4 }' >>"$tmp"
@@ -91,6 +93,7 @@ clients() {
 		$1 == "N" { m = $2; seen[m] = 1; nip[m] = $3; ndev[m] = $4; st[m] = $5; next }
 		$1 == "S" { m = $2; seen[m] = 1; sip[m] = $3; sname[m] = $4; next }
 		$1 == "R" { pres[$2] = 1; next }
+		$1 == "L" { lwan[$2] = $3; next }
 		$1 == "M" { m = $2; seen[m] = 1; mname[m] = $3; down[m] = $4; up[m] = $5; blk[m] = $6; mtype[m] = $7; prio[m] = $8; next }
 		$1 == "W" { m = $2; seen[m] = 1; wsig[m] = $3; wdev[m] = $4; wssid[m] = $5; next }
 		$1 == "H" { m = $2; hif[m] = $3; hact[m] = $4; hname[m] = $5; hmanu[m] = $6; hicon[m] = $7; next }
@@ -115,7 +118,7 @@ clients() {
 				printf "{\"mac\":%s,\"ip\":%s,\"name\":%s,\"hostname\":%s,", str(m), str(ip), str(name), str(hn[m] != "" ? hn[m] : hname[m])
 				printf "\"static\":%s,\"static_ip\":%s,\"online\":%s,\"state\":%s,\"dev\":%s,", bool(sip[m] != ""), str(sip[m]), bool(online), str(st[m]), str(ndev[m])
 				printf "\"conn\":%s,\"wifi_dev\":%s,\"ssid\":%s,\"signal\":%s,", str(wifi ? "wifi" : "lan"), str(wdev[m]), str(wssid[m]), sig
-				printf "\"priority\":%s,\"presence\":%s,", bool(prio[m] == 1), bool(m in pres)
+				printf "\"priority\":%s,\"presence\":%s,\"wan\":%s,", bool(prio[m] == 1), bool(m in pres), str(lwan[m])
 				printf "\"sched_blocked\":%s,\"schedule\":[", bool(m in sblk)
 				ns = split(sch[m], se, " "); for (j = 1; j <= ns; j++) printf "%s%s", (j > 1 ? "," : ""), str(se[j])
 				printf "],"
@@ -164,7 +167,7 @@ np_del_static() {
 }
 
 set_client() {
-	local input mac sid t v name ip st blk dhcp=0
+	local input mac sid t v name ip st blk dhcp=0 linechg=
 	input=$(cat)
 	json_load "$input" 2>/dev/null || np_err "Geçersiz istek"
 	json_get_var mac mac
@@ -216,6 +219,26 @@ set_client() {
 		if [ "$v" = 1 ]; then uci set "netpanel.$sid.priority=1"; else uci -q delete "netpanel.$sid.priority"; fi
 	fi
 
+	# İnternet hattı: "" = otomatik, "wan2" = önce bu hat (koparsa diğeri), "wan2!" = yalnız bu hat
+	if json_get_type t wan; then
+		json_get_var v wan
+		case "$v" in
+		"") uci -q delete "netpanel.$sid.wan" ;;
+		*[!A-Za-z0-9_!]* | *!?*) np_err "Geçersiz hat" ;;
+		*)
+			[ "$(uci -q get "mwan3.${v%!}")" = interface ] || np_err "Bu hat çoklu hat sisteminde (mwan3) tanımlı değil"
+			uci set "netpanel.$sid.wan=$v"
+			# mwan3 kuralı IP'ye göre çalışır: cihazın sabit IP'si yoksa şu anki IP'sini sabitle
+			if [ -z "$(np_host_section "$mac")" ]; then
+				ip=$(np_ip_for_mac "$mac")
+				np_valid_ip "$ip" || np_err "Cihazın IP adresi bulunamadı; cihaz açıkken tekrar deneyin"
+				np_set_static "$mac" "$ip" "$(uci -q get "netpanel.$sid.name")"
+				dhcp=1
+			fi ;;
+		esac
+		linechg=1
+	fi
+
 	# Saat planı: ["12345|23:00|07:00", ...]  (1=Pzt..7=Paz; boş dizi = plan yok)
 	if json_get_type t schedule && [ "$t" = array ]; then
 		local keys k e
@@ -254,6 +277,7 @@ set_client() {
 		/etc/init.d/dnsmasq reload >/dev/null 2>&1
 	fi
 	/usr/sbin/netpanel-apply >/dev/null 2>&1
+	[ -n "$linechg" ] && /usr/libexec/netpanel/wanctl.sh devrules >/dev/null 2>&1
 	echo '{"ok":true}'
 }
 
@@ -415,7 +439,7 @@ hw_set() {
 
 case "$1" in
 list)
-	echo '{"clients":{},"status":{},"set_client":{"mac":"str","name":"str","static":true,"ip":"str","down":32,"up":32,"blocked":true,"type":"str","priority":true,"presence":true,"schedule":[]},"sysinfo":{},"set_password":{"old":"str","new":"str"},"web_scan":{},"forget_client":{"mac":"str"},"set_wifi":{"section":"str","ssid":"str","key":"str","disabled":true},"hw_status":{},"hw_set":{"band":"str","enabled":true},"hw_config":{"enabled":true,"host":"str","username":"str","password":"str"},"wan_config":{},"wan_set":{"name":"str","proto":"str","username":"str","password":"str","vlan":32,"dns":"str","mtu":32,"ipaddr":"str","netmask":"str","gateway":"str","enabled":true},"wan_mode":{"mode":"str","primary":"str","weights":{}},"wan_confirm":{},"wan_revert":{},"wan_reconnect":{"name":"str"},"wan_events":{},"wan_ports":{},"wan_add":{"device":"str","proto":"str","username":"str","password":"str","vlan":32,"mode":"str","primary":"str"},"sqm_config":{},"sqm_set":{"section":"str","interface":"str","enabled":true,"download":32,"upload":32,"script":"str","linklayer":"str","overhead":32},"sqm_delete":{"section":"str"},"set_offload":{"enabled":true},"speedtest_start":{"wan":"str","mode":"str","server":"str"},"speedtest_status":{},"hw_wifi_get":{},"hw_wifi_set":{"band":"str","ssid":"str","password":"str","channel":32,"hidden":true},"hw_wifi_scan":{},"hw_guest_get":{},"hw_guest_set":{"enabled":true,"ssid":"str","password":"str","open":true,"valid":32,"limit":true,"limit_mbps":32},"hw_guest_extend":{},"hw_guest_qr":{},"usage_get":{"days":32},"apps_get":{"days":32,"mac":"str"},"ping_get":{"hours":32},"newdev_list":{},"newdev_ack":{},"notify_get":{},"notify_set":{"enabled":true,"token":"str","chat_id":"str","wan":true,"newdev":true,"presence":true,"system":true,"block_new":true},"notify_test":{},"tz_get":{},"tz_set":{"zone":"str"},"backup_create":{},"backup_restore":{"data":"str"},"cf_status":{},"cf_set_token":{"token":"str"},"cf_set_enabled":{"enabled":true},"cf_lookup":{"api_token":"str"},"cf_publish":{"api_token":"str","account_id":"str","zone_id":"str","subdomain":"str","service":"str","access_email":"str"},"cf_unpublish":{"api_token":"str","hostname":"str"},"integ_get":{},"integ_set":{"id":"str","enabled":true},"scan_start":{"ports":true,"range":"str"},"scan_status":{},"scan_wol":{"mac":"str"},"update_check":{"force":true},"update_apply":{},"update_status":{},"update_set":{"auto":true},"pf_list":{},"pf_set":{"id":"str","name":"str","proto":"str","ext_port":"str","int_port":"str","ip":"str","enabled":true},"pf_delete":{"id":"str"},"upnp_set":{"enabled":true},"lan_get":{},"lan_set":{"ip":"str","dhcp_enabled":true,"start":32,"limit":32,"leasetime":"str","dns":[]},"lan_confirm":{},"lan_revert":{},"wg_status":{},"wg_setup":{"port":32,"endpoint":"str"},"wg_set":{"enabled":true,"endpoint":"str"},"wg_add":{"name":"str","full_tunnel":true},"wg_delete":{"id":"str"},"qr":{"text":"str"},"pkg_install":{"set":"str"},"pkg_status":{"set":"str"},"ag_status":{},"ag_setup":{"password":"str"},"ag_enable":{"enabled":true},"ag_connect":{"user":"str","password":"str"},"ag_protection":{"enabled":true,"minutes":32},"ag_services":{},"ag_global_get":{},"ag_global_set":{"services":[]},"ag_client_get":{"mac":"str","ip":"str"},"ag_client_set":{"mac":"str","ip":"str","name":"str","filtering":true,"parental":true,"safesearch":true,"services":[]},"st_sched_get":{},"st_sched_set":{"enabled":true,"hour":32,"wan":"str"},"sec_get":{},"sec_https":{"redirect":true},"wizard_done":{},"log_get":{"lines":32,"q":"str","level":"str"},"sysopt_get":{},"sysopt_set":{"reboot_mode":"str","reboot_hour":32,"reboot_day":32,"alerts":true},"tp_status":{},"tp_config":{"enabled":true,"host":"str","username":"str","password":"str"},"tp_set":{"band":"str","enabled":true},"tp_wifi_set":{"band":"str","ssid":"str","password":"str"},"fw_set":{"ping":true,"dmz_ip":"str"},"conn_list":{"ip":"str"},"sec_strict":{"enabled":true},"auth_list":{},"auth_unban":{"ip":"str"}}'
+	echo '{"clients":{},"status":{},"set_client":{"mac":"str","name":"str","static":true,"ip":"str","down":32,"up":32,"blocked":true,"type":"str","priority":true,"presence":true,"schedule":[],"wan":"str"},"sysinfo":{},"set_password":{"old":"str","new":"str"},"web_scan":{},"forget_client":{"mac":"str"},"set_wifi":{"section":"str","ssid":"str","key":"str","disabled":true},"hw_status":{},"hw_set":{"band":"str","enabled":true},"hw_config":{"enabled":true,"host":"str","username":"str","password":"str"},"wan_config":{},"wan_set":{"name":"str","proto":"str","username":"str","password":"str","vlan":32,"dns":"str","mtu":32,"ipaddr":"str","netmask":"str","gateway":"str","enabled":true},"wan_mode":{"mode":"str","primary":"str","weights":{}},"wan_confirm":{},"wan_revert":{},"wan_reconnect":{"name":"str"},"wan_events":{},"wan_ports":{},"wan_add":{"device":"str","proto":"str","username":"str","password":"str","vlan":32,"mode":"str","primary":"str"},"sqm_config":{},"sqm_set":{"section":"str","interface":"str","enabled":true,"download":32,"upload":32,"script":"str","linklayer":"str","overhead":32},"sqm_delete":{"section":"str"},"set_offload":{"enabled":true},"speedtest_start":{"wan":"str","mode":"str","server":"str"},"speedtest_status":{},"hw_wifi_get":{},"hw_wifi_set":{"band":"str","ssid":"str","password":"str","channel":32,"hidden":true},"hw_wifi_scan":{},"hw_guest_get":{},"hw_guest_set":{"enabled":true,"ssid":"str","password":"str","open":true,"valid":32,"limit":true,"limit_mbps":32},"hw_guest_extend":{},"hw_guest_qr":{},"usage_get":{"days":32},"apps_get":{"days":32,"mac":"str"},"ping_get":{"hours":32},"newdev_list":{},"newdev_ack":{},"notify_get":{},"notify_set":{"enabled":true,"token":"str","chat_id":"str","wan":true,"newdev":true,"presence":true,"system":true,"block_new":true},"notify_test":{},"tz_get":{},"tz_set":{"zone":"str"},"backup_create":{},"backup_restore":{"data":"str"},"cf_status":{},"cf_set_token":{"token":"str"},"cf_set_enabled":{"enabled":true},"cf_lookup":{"api_token":"str"},"cf_publish":{"api_token":"str","account_id":"str","zone_id":"str","subdomain":"str","service":"str","access_email":"str"},"cf_unpublish":{"api_token":"str","hostname":"str"},"integ_get":{},"integ_set":{"id":"str","enabled":true},"scan_start":{"ports":true,"range":"str"},"scan_status":{},"scan_wol":{"mac":"str"},"update_check":{"force":true},"update_apply":{},"update_status":{},"update_set":{"auto":true},"pf_list":{},"pf_set":{"id":"str","name":"str","proto":"str","ext_port":"str","int_port":"str","ip":"str","enabled":true},"pf_delete":{"id":"str"},"upnp_set":{"enabled":true},"lan_get":{},"lan_set":{"ip":"str","dhcp_enabled":true,"start":32,"limit":32,"leasetime":"str","dns":[]},"lan_confirm":{},"lan_revert":{},"wg_status":{},"wg_setup":{"port":32,"endpoint":"str"},"wg_set":{"enabled":true,"endpoint":"str"},"wg_add":{"name":"str","full_tunnel":true},"wg_delete":{"id":"str"},"qr":{"text":"str"},"pkg_install":{"set":"str"},"pkg_status":{"set":"str"},"ag_status":{},"ag_setup":{"password":"str"},"ag_enable":{"enabled":true},"ag_connect":{"user":"str","password":"str"},"ag_protection":{"enabled":true,"minutes":32},"ag_services":{},"ag_global_get":{},"ag_global_set":{"services":[]},"ag_client_get":{"mac":"str","ip":"str"},"ag_client_set":{"mac":"str","ip":"str","name":"str","filtering":true,"parental":true,"safesearch":true,"services":[]},"st_sched_get":{},"st_sched_set":{"enabled":true,"hour":32,"wan":"str"},"sec_get":{},"sec_https":{"redirect":true},"wizard_done":{},"log_get":{"lines":32,"q":"str","level":"str"},"sysopt_get":{},"sysopt_set":{"reboot_mode":"str","reboot_hour":32,"reboot_day":32,"alerts":true},"tp_status":{},"tp_config":{"enabled":true,"host":"str","username":"str","password":"str"},"tp_set":{"band":"str","enabled":true},"tp_wifi_set":{"band":"str","ssid":"str","password":"str"},"fw_set":{"ping":true,"dmz_ip":"str"},"conn_list":{"ip":"str"},"sec_strict":{"enabled":true},"auth_list":{},"auth_unban":{"ip":"str"}}'
 	;;
 call)
 	case "$2" in

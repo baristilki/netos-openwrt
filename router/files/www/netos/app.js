@@ -462,7 +462,7 @@
     state.networks.interfaces.find((n) => n.name === c.iface) ||
     state.networks.interfaces.find((n) => !n.isWan && NP.validate.inSubnet(c.ip, n.cidr));
   function badges(c) {
-    return `${c.schedBlocked ? '<span class="badge err">Plan: internet kapalı</span>' : c.schedule?.length ? '<span class="badge">Saat planı</span>' : ''}${c.static ? '<span class="badge ok">Sabit IP</span>' : ''}${c.staticPending ? '<span class="badge warn">IP bekliyor</span>' : ''}${c.priority ? '<span class="badge ok">Öncelikli</span>' : ''}${c.limitDown || c.limitUp ? `<span class="badge warn">S&#305;n&#305;r &#8595;${c.limitDown || '&#8734;'} &#8593;${c.limitUp || '&#8734;'}</span>` : ''}${c.blocked ? '<span class="badge err">Engelli</span>' : ''}`;
+    return `${c.schedBlocked ? '<span class="badge err">Plan: internet kapalı</span>' : c.schedule?.length ? '<span class="badge">Saat planı</span>' : ''}${c.static ? '<span class="badge ok">Sabit IP</span>' : ''}${c.staticPending ? '<span class="badge warn">IP bekliyor</span>' : ''}${c.priority ? '<span class="badge ok">Öncelikli</span>' : ''}${c.wan ? `<span class="badge">${c.wan.endsWith('!') ? 'Yalnız' : 'Hat'}: ${esc(c.wan.replace(/!$/, ''))}</span>` : ''}${c.limitDown || c.limitUp ? `<span class="badge warn">S&#305;n&#305;r &#8595;${c.limitDown || '&#8734;'} &#8593;${c.limitUp || '&#8734;'}</span>` : ''}${c.blocked ? '<span class="badge err">Engelli</span>' : ''}`;
   }
   function signal(c) {
     return `<span class="conn-badge">${c.conn === 'wifi' ? icon('wifi') : icon('ethernet')}${esc(c.connLabel || (c.conn === 'wifi' ? 'Wi-Fi' : 'Ethernet'))}</span>${c.via === 'huawei' ? '<span class="badge">Huawei</span>' : ''}`;
@@ -2467,6 +2467,17 @@
     prioritySection.className = 'drawer-section';
     prioritySection.innerHTML = `<div class="toggle-line"><div><strong>Oyun &#246;nceli&#287;i</strong><p>Y&#252;kleme trafi&#287;ine &#246;ncelik verir.</p></div><input class="switch" type="checkbox" name="priority" ${c.priority ? 'checked' : ''}></div>`;
     clientForm.insertBefore(prioritySection, speedSection);
+    // cihaz başına internet hattı (yalnız birden fazla hat varsa)
+    let lines = (state.overview?.wans || []).map((w) => w.name).filter(Boolean);
+    if (lines.length > 1 || c.wan) {
+      let sec = document.createElement('div'),
+        lab = (n) => (state.overview?.wans || []).find((w) => w.name === n)?.label || n;
+      sec.className = 'drawer-section';
+      sec.innerHTML = `<h3>İnternet hattı</h3><div class="field-wrap"><label for="client-wan">Bu cihaz hangi hattan çıksın?</label><select class="field" id="client-wan" name="wan"><option value="">Otomatik (genel çoklu hat ayarı)</option>${lines
+        .map((n) => `<option value="${esc(n)}" ${c.wan === n ? 'selected' : ''}>Önce ${esc(lab(n))} (koparsa diğer hat)</option><option value="${esc(n)}!" ${c.wan === n + '!' ? 'selected' : ''}>Yalnız ${esc(lab(n))}</option>`)
+        .join('')}</select><span class="field-hint">“Yalnız” seçilirse o hat koptuğunda bu cihazın interneti de kesilir. Kural cihazın IP adresine bağlıdır; cihaza otomatik sabit IP ayrılır.</span></div>`;
+      clientForm.insertBefore(sec, prioritySection);
+    }
     document.getElementById('drawer-host').replaceChildren(...backdrop.children);
     state.agDraft = state.agDraft?.mac === c.mac ? state.agDraft : null;
     if (integOn('adguard') && !state.xAg) loadAg('/devices');
@@ -3155,6 +3166,7 @@
       if (blocked !== !!c.blocked) patch.blocked = blocked;
       let priority = data.get('priority') === 'on';
       if (priority !== !!c.priority) patch.priority = priority;
+      if (data.has('wan') && data.get('wan') !== (c.wan || '')) patch.wan = data.get('wan');
       let ip = data.get('ip');
       if (
         data.get('static') === 'on' &&

@@ -326,6 +326,67 @@ events() {
 }
 
 
+# ── cihaz başına internet hattı ─────────────────────────────────────────────
+# netpanel.<cihaz>.wan = 'wan2' (önce bu hat, koparsa diğerleri) | 'wan2!' (yalnız bu hat)
+# mwan3 kuralı kaynak IP'ye göre çalışır (MAC desteklemez): cihazın IP'si sabit kayıttan / kiradan
+# bulunur, kurallar en üste konur. Yalnız değişiklik varsa mwan3 yeniden başlatılır.
+dev_rules() {
+	local want have sid mac v w strict ip pol n m o tmp
+	[ -f "$CONF/mwan3" ] || return 0
+	tmp=$(mktemp)
+	uci -q show netpanel | sed -n "s/^netpanel\.\(m_[0-9a-f]\{12\}\)\.wan='\(.*\)'$/\1 \2/p" >"$tmp"
+	want=""
+	while read -r sid v; do
+		w=${v%!}; strict=0; [ "$w" != "$v" ] && strict=1
+		[ "$(uci -q get "mwan3.$w")" = interface ] || continue
+		mac=$(echo "${sid#m_}" | sed 's/../&:/g; s/:$//')
+		ip=$(np_ip_for_mac "$mac")
+		np_valid_ip "$ip" 2>/dev/null || continue
+		[ $strict = 1 ] && pol="np_only_$w" || pol="np_pref_$w"
+		want="$want np_dev_${sid#m_}|$ip|$pol"
+	done <"$tmp"
+	rm -f "$tmp"
+	have=""
+	for r in $(uci -q show mwan3 | sed -n 's/^mwan3\.\(np_dev_[0-9a-f]*\)=rule$/\1/p'); do
+		have="$have $r|$(uci -q get "mwan3.$r.src_ip")|$(uci -q get "mwan3.$r.use_policy")"
+	done
+	[ "$(echo $want | tr ' ' '\n' | sort)" = "$(echo $have | tr ' ' '\n' | sort)" ] && return 0
+
+	# eski NetOS cihaz kurallarını, politikalarını ve üyelerini sil, yeniden kur
+	for r in $(uci -q show mwan3 | grep -E '^mwan3\.np_(dev|pref|only|m)_[A-Za-z0-9_]*=(rule|policy|member)$' | sed 's/^mwan3\.\([^=]*\)=.*/\1/'); do
+		uci -q delete "mwan3.$r"
+	done
+	for e in $want; do
+		r=${e%%|*}; ip=${e#*|}; ip=${ip%|*}; pol=${e##*|}
+		w=${pol#np_pref_}; w=${w#np_only_}
+		if [ "$(uci -q get "mwan3.$pol")" != policy ]; then
+			uci set "mwan3.np_m_${w}_1=member"; uci set "mwan3.np_m_${w}_1.interface=$w"
+			uci set "mwan3.np_m_${w}_1.metric=1"; uci set "mwan3.np_m_${w}_1.weight=1"
+			uci set "mwan3.$pol=policy"; uci add_list "mwan3.$pol.use_member=np_m_${w}_1"
+			uci set "mwan3.$pol.last_resort=unreachable"
+			case "$pol" in np_pref_*)
+				for o in $(uci -q show mwan3 | sed -n 's/^mwan3\.\([^.]*\)=interface$/\1/p'); do
+					[ "$o" = "$w" ] && continue
+					[ "$(uci -q get "mwan3.$o.enabled")" = 0 ] && continue
+					uci set "mwan3.np_m_${o}_2=member"; uci set "mwan3.np_m_${o}_2.interface=$o"
+					uci set "mwan3.np_m_${o}_2.metric=2"; uci set "mwan3.np_m_${o}_2.weight=1"
+					uci add_list "mwan3.$pol.use_member=np_m_${o}_2"
+				done ;;
+			esac
+		fi
+		uci set "mwan3.$r=rule"
+		uci set "mwan3.$r.src_ip=$ip"
+		uci set "mwan3.$r.family=ipv4"
+		uci set "mwan3.$r.proto=all"
+		uci set "mwan3.$r.sticky=0"
+		uci set "mwan3.$r.use_policy=$pol"
+		uci reorder "mwan3.$r=0"
+	done
+	uci commit mwan3
+	svc /etc/init.d/mwan3 restart
+	logger -t netos "cihaz hat kuralları güncellendi:${want:- yok}"
+}
+
 # ── fiziksel portlar ────────────────────────────────────────────────────────
 SYSNET=${NP_SYSNET:-/sys/class/net}
 rd() { cat "$1" 2>/dev/null | head -1; }
@@ -490,5 +551,6 @@ events) events ;;
 ports) ports ;;
 add) add_wan ;;
 rpf) rpf ;;
-*) echo "kullanım: $0 config|set|mode|confirm|revert|reconnect|events|ports|add|rpf" >&2; exit 1 ;;
+devrules) dev_rules ;;
+*) echo "kullanım: $0 config|set|mode|confirm|revert|reconnect|events|ports|add|rpf|devrules" >&2; exit 1 ;;
 esac

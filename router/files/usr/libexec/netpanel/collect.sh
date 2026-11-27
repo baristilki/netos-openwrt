@@ -185,6 +185,7 @@ all)
 	presence &
 	/usr/libexec/netpanel/sysctl.sh check
 	/usr/libexec/netpanel/wanctl.sh rpf
+	/usr/libexec/netpanel/wanctl.sh devrules
 	/usr/libexec/netpanel/authguard.sh scan
 	usage
 	ping_hist

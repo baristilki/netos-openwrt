@@ -480,10 +480,19 @@ window.NETOS_EN = {
   "Şifreli misafir ağı için bir şifre girin": "Enter a password for an encrypted guest network",
   "Hız sınırı #-# Mbit/s olmalı": "Speed limit must be 1-1000 Mbit/s",
   "Aşağıdaki": "Below",
+  "Bu cihaz hangi hattan çıksın?": "Which line should this device use?",
+  "Otomatik (genel çoklu hat ayarı)": "Automatic (general multi-line setting)",
+  "“Yalnız” seçilirse o hat koptuğunda bu cihazın interneti de kesilir. Kural cihazın IP adresine bağlıdır; cihaza otomatik sabit IP ayrılır.": "With “Only”, this device loses internet when that line drops. The rule is tied to the device’s IP, so a static IP is reserved automatically.",
+  "Bu hat çoklu hat sisteminde (mwan#) tanımlı değil": "This line isn’t defined in the multi-line system (mwan3)",
+  "Cihazın IP adresi bulunamadı; cihaz açıkken tekrar deneyin": "Couldn’t find the device’s IP address; try again while it’s online",
 };
 
 /* Parça çevirileri: tam eşleşme yoksa metnin içinde geçen bu parçalar değiştirilir (değişken içeren metinler için). Uzundan kısaya uygulanır. */
 window.NETOS_EN_FRAG = {
+  "Önce ": "Prefer ",
+  " (koparsa diğer hat)": " (fall back to the other line)",
+  "Yalnız ": "Only ",
+  "Hat: ": "Line: ",
   "(sabit IP değil!)": "(not a static IP!)", "İstanbul": "Istanbul", "İzmir": "Izmir", "Tünel ": "Tunnel ",
   " etkinleştirildi": " enabled", " kapatıldı": " turned off", " açıldı": " turned on", " yayında": " is live", " indirildi": " downloaded",
   "Kopyalandı: ": "Copied: ", "Kanal: ": "Channel: ", "otomatik": "auto", "şu an": "now", " geri geldi": " is back", " bağlantısı koptu": " connection lost",

@@ -435,6 +435,7 @@
         connLabel: c.conn === 'wifi' ? ('Wi-Fi' + (c.band ? ' ' + fmt.band(c.band) : '')) : 'Ethernet',
         web: c.web || [],                  // açılabilir web arayüzleri (url listesi)
         priority: !!c.priority,            // oyun önceliği (giden trafik EF/Voice)
+        wan: c.wan || '',                  // internet hattı: '' otomatik | 'wan2' önce bu hat | 'wan2!' yalnız bu hat
         presence: !!c.presence,            // eve geldi / ayrıldı bildirimi
         schedule: (c.schedule || []).map(parseSchedule).filter(Boolean), // [{ days:[1..7], from, to }]
         schedBlocked: !!c.sched_blocked,   // şu an saat planı yüzünden internetsiz
@@ -483,6 +484,7 @@
     }
     if (patch.blocked != null) a.blocked = !!patch.blocked;
     if (patch.priority != null) a.priority = !!patch.priority;
+    if (patch.wan != null) a.wan = String(patch.wan);
     if (patch.presence != null) a.presence = !!patch.presence;
     if (patch.schedule != null) {
       if (patch.schedule.length > 8) throw new ApiError('En fazla 8 plan eklenebilir', 'validate');
@@ -1777,7 +1779,7 @@
               signal: online && w ? d.sig + Math.round(Math.random() * 4 - 2) : null,
               rx_bytes: Math.floor(cnt[d.mac].rx), tx_bytes: Math.floor(cnt[d.mac].tx),
               limit_down: m.down || 0, limit_up: m.up || 0, blocked: !!m.blocked, lease_expires: 0,
-              type: m.type || '', vendor: d.manu || '', web: d.web || [], priority: !!m.priority, presence: !!m.presence, schedule: m.schedule || [], sched_blocked: !!m.schedBlockedDemo,
+              type: m.type || '', vendor: d.manu || '', web: d.web || [], priority: !!m.priority, presence: !!m.presence, schedule: m.schedule || [], sched_blocked: !!m.schedBlockedDemo, wan: m.wan || '',
               via: !w && d.hb ? 'huawei' : 'router',
               band: !w && d.hb && d.hb !== 'LAN' ? (d.hb[0] === '2' ? '2g' : '5g') : '',
               ...(!w && d.hb && d.hb !== 'LAN' ? { conn: 'wifi' } : {}),
@@ -1793,6 +1795,7 @@
         if (a.blocked != null) m.blocked = a.blocked;
         if (a.type != null) m.type = a.type;
         if (a.priority != null) m.priority = a.priority;
+        if (a.wan != null) m.wan = a.wan;
         if (a.presence != null) m.presence = a.presence;
         if (a.schedule != null) m.schedule = a.schedule;
         if (a.static === true) {
