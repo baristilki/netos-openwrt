@@ -183,6 +183,7 @@ all)
 	sched
 	stsched
 	presence &
+	/usr/libexec/netpanel/sysctl.sh check
 	usage
 	ping_hist
 	;;

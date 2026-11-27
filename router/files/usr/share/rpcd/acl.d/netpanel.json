@@ -31,7 +31,10 @@
 					"ag_services",
 					"ag_global_get",
 					"ag_client_get",
-					"st_sched_get"
+					"st_sched_get",
+					"sec_get",
+					"log_get",
+					"sysopt_get"
 				],
 				"system": [
 					"board",
@@ -127,7 +130,10 @@
 					"ag_protection",
 					"ag_global_set",
 					"ag_client_set",
-					"st_sched_set"
+					"st_sched_set",
+					"sec_https",
+					"wizard_done",
+					"sysopt_set"
 				],
 				"system": [
 					"reboot"

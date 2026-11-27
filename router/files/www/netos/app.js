@@ -185,6 +185,11 @@
     let fw = (state.overview?.firmware || '').match(/OpenWrt\s+[\w.-]+/)?.[0] || 'OpenWrt';
     let link = ([p, i, t]) => `<a href="#${p}" class="${isActive(p) ? 'active' : ''}"${isActive(p) ? ' aria-current="page"' : ''}>${icon(i)}<span>${t}</span></a>`;
     if (NP.hasSession() && !state.xInteg && !state.xIntegError) loadX('xInteg', () => NP.getIntegrations());
+    if (NP.hasSession() && !state.xSec && !state.xSecError) loadSec();
+    if (NP.hasSession() && state.xSec && !state.wizShown && !state.xSec.wizardDone && state.page !== '/welcome') {
+      state.wizShown = true;
+      setTimeout(() => (location.hash = '#/welcome'));
+    }
     if (NP.hasSession() && !state.lanChecked) {
       state.lanChecked = true;
       NP.getLan()
@@ -699,7 +704,7 @@
   function systemExtras() {
     if (!state.xTz && !state.xTzError) loadX('xTz', () => NP.getTimezone(), '/system');
     if (!state.xNotify && !state.xNotifyError) loadX('xNotify', () => NP.getNotify(), '/system');
-    return `<div class="span-6 x-stack">${tzCard()}${backupCard()}</div>` + notifyCard();
+    return securityCard() + maintenanceCard() + `<div class="span-6 x-stack">${tzCard()}${backupCard()}</div>` + notifyCard();
   }
   function tzCard() {
     let t = state.xTz;
@@ -1380,6 +1385,120 @@
     return `<section class="card span-12">${cardHead('clock', 'Zamanlanmış hız testi')}${body}</section>`;
   }
 
+  /* ═══ Güvenlik, bakım, günlük, ilk kurulum ═══════════════════════════════ */
+  const IDLE_KEY = 'np_idle_min';
+  const idleMin = () => {
+    try {
+      let v = localStorage.getItem(IDLE_KEY);
+      return v == null ? 30 : +v;
+    } catch (_) {
+      return 30;
+    }
+  };
+  function loadSec(page) {
+    if (!state.xSec && !state.xSecError) loadX('xSec', () => NP.getSecurity(), page);
+    return state.xSec;
+  }
+  // Router şifresizse her sayfanın üstünde uyarı
+  function pwBanner() {
+    if (!state.xSec?.rootPwEmpty || state.page === '/welcome') return '';
+    return `<div class="alert alert-strong pw-banner"><div><strong>Router’ın şifresi yok!</strong><span>Aynı ağdaki herkes bu panele, LuCI’ye ve SSH’a şifresiz girebilir.</span></div><a class="btn small primary" href="#/welcome">Şimdi şifre belirle</a></div>`;
+  }
+  function securityCard() {
+    let s = loadSec('/system');
+    let body;
+    if (!s) body = '<div class="empty">Yükleniyor…</div>';
+    else {
+      let host = location.hostname;
+      body = `${s.rootPwEmpty ? '<div class="alert alert-strong">Router şifresiz. Aşağıdaki “Panel şifresi” bölümünden hemen bir şifre belirleyin.</div>' : '<div class="sec-ok">✓ Router şifresi belirlenmiş</div>'}
+        <h3 class="x-sub">HTTPS (şifreli bağlantı)</h3>
+        ${!s.httpsAvailable ? pkgGate('https', 'HTTPS', '~60 KB') : `<div class="toggle-line"><div><strong>Paneli her zaman HTTPS ile aç</strong><p>http:// adresleri https://’e yönlenir. Sertifika routerın kendisine ait olduğu için tarayıcı ilk girişte “güvenli değil” uyarısı gösterir; “Gelişmiş > Devam et” ile geçebilirsiniz.</p></div><input class="switch" type="checkbox" data-https${s.httpsRedirect ? ' checked' : ''}></div>
+          <p class="field-hint">Şifreli adres: <a href="https://${esc(host)}/netos/">https://${esc(host)}/netos/</a></p>
+          ${s.tunnelHttpHosts ? `<p class="field-hint warn-text">Cloudflare tünelindeki ${esc(s.tunnelHttpHosts)} panele http (80) üzerinden gidiyor; yönlendirme açılırsa döngüye girer. Tünel hedefini https://${esc(host)}:443 yapın.</p>` : ''}`}
+        <h3 class="x-sub">Otomatik oturum kapatma</h3>
+        <div class="x-inline"><select class="field" id="idle-min">${[[0, 'Kapalı'], [15, '15 dakika'], [30, '30 dakika'], [60, '1 saat']].map(([v, t]) => `<option value="${v}"${idleMin() === v ? ' selected' : ''}>${t} işlem yapılmazsa</option>`).join('')}</select></div>
+        <p class="field-hint">Bu tarayıcı için geçerlidir; ortak bilgisayarlarda açık bırakılan oturumları kapatır.</p>`;
+    }
+    return `<section class="card span-6" id="sec-card">${cardHead('lock', 'Güvenlik')}${body}</section>`;
+  }
+  function maintenanceCard() {
+    if (!state.xOpt && !state.xOptError) loadX('xOpt', () => NP.getSysOpt(), '/system');
+    let o = state.xOpt;
+    let days = ['', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
+    let body = !o
+      ? '<div class="empty">Yükleniyor…</div>'
+      : `<form id="sysopt-form" class="x-form">
+        <div class="toggle-line"><div><strong>Sistem uyarıları</strong><p>Sıcaklık ${o.tempLimit}°C, depolama %90 ya da bellek %92’yi aşınca Telegram’dan haber verir ve günlüğe yazar.</p></div><input class="switch" type="checkbox" name="alerts"${o.alerts ? ' checked' : ''}></div>
+        <div class="field-wrap"><label>Otomatik yeniden başlatma</label><select class="field" name="rebootMode"><option value="off"${o.rebootMode === 'off' ? ' selected' : ''}>Kapalı</option><option value="daily"${o.rebootMode === 'daily' ? ' selected' : ''}>Her gün</option><option value="weekly"${o.rebootMode === 'weekly' ? ' selected' : ''}>Her hafta</option></select></div>
+        <div class="x-grid2" id="reboot-when"${o.rebootMode === 'off' ? ' hidden' : ''}><div class="field-wrap" id="reboot-day"${o.rebootMode === 'weekly' ? '' : ' hidden'}><label>Gün</label><select class="field" name="rebootDay">${days.slice(1).map((d, i) => `<option value="${i + 1}"${o.rebootDay === i + 1 ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
+        <div class="field-wrap"><label>Saat</label><select class="field" name="rebootHour">${Array.from({ length: 24 }, (_, h) => `<option value="${h}"${+o.rebootHour === h ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></div></div>
+        <div class="x-form-foot"><a class="link-btn" href="#/logs">Sistem günlüğü →</a><button class="btn small primary" type="submit">Kaydet</button></div></form>`;
+    return `<section class="card span-6">${cardHead('system', 'Bakım')}${body}</section>`;
+  }
+
+  /* ── Sistem günlüğü ── */
+  function logsPage() {
+    let f = (state.logF = state.logF || { level: '', q: '', lines: 200 });
+    if (!state.xLog && !state.xLogError) loadX('xLog', () => NP.getLog(f), '/logs');
+    let head = pageHead('Sistem', 'Sistem günlüğü', 'Router’ın kayıtları: bağlantılar, hatalar, uyarılar.', '<a class="btn" href="#/system">← Sistem</a>');
+    let lv = (k, t) => `<button type="button" class="seg-btn${f.level === k ? ' active' : ''}" data-log-level="${k}">${t}</button>`;
+    let tools = `<div class="log-tools"><div class="seg">${lv('', 'Tümü')}${lv('warn', 'Uyarılar')}${lv('err', 'Hatalar')}</div><form id="log-search" class="x-inline"><input class="field" name="q" type="search" value="${esc(f.q)}" placeholder="Ara (ör. dnsmasq, wan, hata)"><button class="btn small" type="submit">Ara</button></form>
+      <label class="check-line"><input type="checkbox" id="log-auto"${state.logAuto ? ' checked' : ''}> Canlı</label><button class="btn small" type="button" data-log-dl>${icon('download')}İndir</button></div>`;
+    let body;
+    if (state.xLogError) body = `<div class="form-error">${esc(state.xLogError)}</div>`;
+    else if (!state.xLog) body = '<div class="empty">Yükleniyor…</div>';
+    else if (!state.xLog.length) body = '<div class="empty">Kayıt bulunamadı.</div>';
+    else
+      body = `<div class="log-list" id="log-list">${state.xLog
+        .map((l) => `<div class="log-line lv-${esc(l.level)}"><span class="log-time num">${esc(l.time.slice(4, 19))}</span><span class="log-lv">${esc(l.level)}</span><span class="log-text">${esc(l.text)}</span></div>`)
+        .join('')}</div><p class="field-hint">${state.xLog.length} satır · en yeni en altta. Günlük RAM’de tutulur, yeniden başlatınca silinir.</p>`;
+    return `${head}<section class="card">${tools}${body}</section>`;
+  }
+  function reloadLog() {
+    state.xLog = null;
+    state.xLogError = '';
+    render();
+  }
+  function scrollLogEnd() {
+    let el = document.getElementById('log-list');
+    if (el) el.scrollTop = el.scrollHeight;
+  }
+
+  /* ── İlk kurulum sihirbazı ── */
+  function welcomePage() {
+    let s = loadSec('/welcome');
+    if (!s) return '<div class="empty">Yükleniyor…</div>';
+    if (!state.xTz && !state.xTzError) loadX('xTz', () => NP.getTimezone(), '/welcome');
+    let step = state.wizStep || (s.rootPwEmpty ? 1 : 2);
+    let steps = ['Şifre', 'Saat dilimi', 'Güncelleme', 'Hazır'];
+    let bar = `<ol class="wiz-steps">${steps.map((t, i) => `<li class="${i + 1 < step ? 'done' : i + 1 === step ? 'on' : ''}"><i>${i + 1 < step ? '✓' : i + 1}</i>${t}</li>`).join('')}</ol>`;
+    let body;
+    if (step === 1)
+      body = `<h2>Router şifresi</h2><p>${s.rootPwEmpty ? '<b>Router’ınızın şifresi yok.</b> Aynı ağdaki herkes bu panele girebilir. Güçlü bir şifre belirleyin; bu şifre LuCI ve SSH için de geçerli olur.' : 'Şifreniz belirlenmiş. İsterseniz değiştirebilirsiniz.'}</p>
+        <form id="wiz-pw" class="x-form wiz-form">${s.rootPwEmpty ? '' : '<div class="field-wrap"><label>Mevcut şifre</label><input class="field" name="old" type="password" autocomplete="current-password"></div>'}
+        <div class="field-wrap"><label>Yeni şifre</label><input class="field" name="pw" type="password" minlength="8" autocomplete="new-password" required></div>
+        <div class="field-wrap"><label>Yeni şifre (tekrar)</label><input class="field" name="pw2" type="password" minlength="8" autocomplete="new-password" required></div>
+        <div class="form-error" id="wiz-error"></div><div class="x-form-foot">${s.rootPwEmpty ? '' : '<button class="btn" type="button" data-wiz-next>Atla</button>'}<button class="btn primary" type="submit">Şifreyi kaydet</button></div></form>`;
+    else if (step === 2) {
+      let t = state.xTz;
+      body = `<h2>Saat dilimi</h2><p>Saat planları, istatistikler ve zamanlanmış işler bu saate göre çalışır.</p>${
+        !t
+          ? '<div class="empty">Yükleniyor…</div>'
+          : `<div class="x-inline"><select class="field" id="wiz-tz">${NP.TIMEZONES.map((z) => `<option value="${z.id}"${(t.isUtc ? 'Europe/Istanbul' : t.zone) === z.id ? ' selected' : ''}>${esc(z.label)}</option>`).join('')}</select></div>`
+      }<div class="x-form-foot"><button class="btn" type="button" data-wiz-back>Geri</button><button class="btn primary" type="button" data-wiz-tz>Devam</button></div>`;
+    } else if (step === 3)
+      body = `<h2>Güncellemeler</h2><p>NetOS yeni sürümleri GitHub’dan alabilir. Otomatik güncelleme açıksa her gece kendisi kurar; ayarlarınız korunur.</p>
+        <div class="toggle-line"><div><strong>Otomatik güncelle</strong><p>Önerilir. Kapalıyken yalnız bildirim gelir.</p></div><input class="switch" type="checkbox" id="wiz-auto" checked></div>
+        <div class="x-form-foot"><button class="btn" type="button" data-wiz-back>Geri</button><button class="btn primary" type="button" data-wiz-upd>Devam</button></div>`;
+    else
+      body = `<h2>Hazırsınız 🎉</h2><p>Temel ayarlar tamam. Sırada yapmak isteyebilecekleriniz:</p>
+        <div class="wiz-links"><a class="more-item" href="#/internet"><span class="more-icon">${icon('globe')}</span><strong>İnternet hattını ayarla (PPPoE)</strong><span class="more-arrow">›</span></a>
+        <a class="more-item" href="#/integrations"><span class="more-icon">${icon('plug')}</span><strong>Entegrasyonlar: Wi-Fi cihazı, reklam engelleme, VPN</strong><span class="more-arrow">›</span></a>
+        <a class="more-item" href="#/system"><span class="more-icon">${icon('bell')}</span><strong>Telegram bildirimlerini kur</strong><span class="more-arrow">›</span></a></div>
+        <div class="x-form-foot"><button class="btn primary" type="button" data-wiz-finish>Paneli aç</button></div>`;
+    return `<div class="wiz"><div class="wiz-head">${brandMark}<div><div class="eyebrow">NetOS kurulumu</div><h1>Hoş geldiniz</h1></div></div>${bar}<section class="card wiz-card">${body}</section></div>`;
+  }
+
   function wanList() {
     return state.wanConfig?.wans || [];
   }
@@ -1742,6 +1861,8 @@
     else if (state.page === '/ports') c.innerHTML = portsPage();
     else if (state.page === '/vpn') c.innerHTML = state.xInteg && !integOn('vpn') ? `${pageHead('Uzaktan erişim', 'VPN (WireGuard)', '')}<section class="card"><div class="empty">VPN entegrasyonu kapalı. <a href="#/integrations">Entegrasyonlar</a>’dan etkinleştirin.</div></section>` : vpnPage();
     else if (state.page === '/adblock') c.innerHTML = adblockPage();
+    else if (state.page === '/logs') c.innerHTML = logsPage();
+    else if (state.page === '/welcome') c.innerHTML = welcomePage();
     else {
       state.page = '/';
       c.innerHTML = state.overview ? home() : '';
@@ -1758,7 +1879,8 @@
     }
     syncGlobalBand();
     if (state.page === '/speed') (c.querySelector('.grid') || c).insertAdjacentHTML('beforeend', speedSchedCard());
-    c.insertAdjacentHTML('afterbegin', lanPendingBanner());
+    c.insertAdjacentHTML('afterbegin', lanPendingBanner() + pwBanner());
+    if (state.page === '/logs') scrollLogEnd();
     if (state.xPanel) drawXPanel();
     if (state.page === '/integrations' && state.integDrawer) drawIntegDrawer();
     else state.integDrawer = null;
@@ -3656,6 +3778,149 @@
     }
     done();
   });
+  // ── Güvenlik / bakım / günlük / sihirbaz: olaylar ──
+  root.addEventListener('change', async (e) => {
+    let t = e.target;
+    if (t.id === 'idle-min') {
+      try {
+        localStorage.setItem(IDLE_KEY, t.value);
+      } catch (_) {}
+      return toast(+t.value ? `${t.value} dakika işlem yapılmazsa oturum kapanacak` : 'Otomatik oturum kapatma kapalı');
+    }
+    if (t.matches('[data-https]')) {
+      if (t.checked && !confirm('Panel bundan sonra https:// ile açılacak; tarayıcı ilk girişte sertifika uyarısı gösterir. Sayfa birkaç saniye içinde yeni adrese geçecek. Devam edilsin mi?')) return (t.checked = false);
+      try {
+        await NP.setHttpsRedirect(t.checked);
+        toast(t.checked ? 'HTTPS açılıyor…' : 'HTTPS yönlendirmesi kapatıldı');
+        if (t.checked && location.protocol === 'http:') setTimeout(() => (location.href = `https://${location.host}${location.pathname}${location.hash}`), 3500);
+      } catch (x) {
+        t.checked = !t.checked;
+        toast(x.message);
+      }
+      state.xSec = null;
+      return;
+    }
+    if (t.closest('#sysopt-form') && t.name === 'rebootMode') {
+      document.getElementById('reboot-when').hidden = t.value === 'off';
+      document.getElementById('reboot-day').hidden = t.value !== 'weekly';
+      return;
+    }
+    if (t.id === 'log-auto') {
+      state.logAuto = t.checked;
+      clearInterval(state.logTimer);
+      if (t.checked)
+        state.logTimer = setInterval(async () => {
+          if (state.page !== '/logs') return clearInterval(state.logTimer);
+          try {
+            state.xLog = await NP.getLog(state.logF);
+            let el = document.getElementById('log-list'),
+              atEnd = !el || el.scrollHeight - el.scrollTop - el.clientHeight < 40;
+            render();
+            if (atEnd) scrollLogEnd();
+          } catch (_) {}
+        }, 4000);
+    }
+  });
+  root.addEventListener('click', async (e) => {
+    let b = e.target.closest('[data-log-level],[data-log-dl],[data-wiz-next],[data-wiz-back],[data-wiz-tz],[data-wiz-upd],[data-wiz-finish]');
+    if (!b) return;
+    let d = b.dataset;
+    if (d.logLevel != null) {
+      state.logF.level = d.logLevel;
+      return reloadLog();
+    }
+    if (b.matches('[data-log-dl]')) {
+      let txt = (state.xLog || []).map((l) => `${l.time} ${l.facility}.${l.level} ${l.text}`).join('\n');
+      let url = URL.createObjectURL(new Blob([txt], { type: 'text/plain' })),
+        a = document.createElement('a');
+      a.href = url;
+      a.download = `netos-gunluk-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return setTimeout(() => URL.revokeObjectURL(url), 5000);
+    }
+    let go = (n) => {
+      state.wizStep = n;
+      render();
+    };
+    let step = state.wizStep || (state.xSec?.rootPwEmpty ? 1 : 2);
+    if (b.matches('[data-wiz-next]')) return go(step + 1);
+    if (b.matches('[data-wiz-back]')) return go(Math.max(1, step - 1));
+    if (b.matches('[data-wiz-tz]')) {
+      let done = xBusy(b, 'Kaydediliyor…');
+      try {
+        let z = document.getElementById('wiz-tz')?.value;
+        if (z && z !== state.xTz?.zone) await NP.setTimezone(z);
+        state.xTz = null;
+        return go(3);
+      } catch (x) {
+        toast(x.message);
+      }
+      return done();
+    }
+    if (b.matches('[data-wiz-upd]')) {
+      try {
+        await NP.setAutoUpdate(document.getElementById('wiz-auto').checked);
+      } catch (_) {}
+      return go(4);
+    }
+    if (b.matches('[data-wiz-finish]')) {
+      try {
+        await NP.finishWizard();
+      } catch (_) {}
+      state.xSec = null;
+      state.wizStep = 0;
+      location.hash = '#/';
+    }
+  });
+  root.addEventListener('submit', async (e) => {
+    let f = e.target;
+    if (!['sysopt-form', 'log-search', 'wiz-pw'].includes(f.id)) return;
+    e.preventDefault();
+    if (f.id === 'log-search') {
+      state.logF.q = f.elements.q.value.trim();
+      return reloadLog();
+    }
+    let btn = f.querySelector('[type=submit]'),
+      done = xBusy(btn, 'Kaydediliyor…');
+    try {
+      if (f.id === 'sysopt-form') {
+        let el = f.elements;
+        await NP.setSysOpt({ alerts: el.alerts.checked, rebootMode: el.rebootMode.value, rebootHour: el.rebootHour.value, rebootDay: el.rebootDay.value });
+        toast('Bakım ayarları kaydedildi');
+        state.xOpt = null;
+      }
+      if (f.id === 'wiz-pw') {
+        let el = f.elements;
+        if (el.pw.value !== el.pw2.value) throw new Error('Şifreler aynı değil');
+        if (el.pw.value.length < 8) throw new Error('Şifre en az 8 karakter olmalı');
+        await NP.changePassword(el.old?.value || '', el.pw.value);
+        toast('Router şifresi kaydedildi');
+        state.xSec = null;
+        state.wizStep = 2;
+        return render();
+      }
+    } catch (x) {
+      let er = f.querySelector('.form-error');
+      if (er) er.textContent = x.message;
+      else toast(x.message);
+    }
+    done();
+  });
+  // Otomatik oturum kapatma: işlem yapılmazsa
+  let lastAct = Date.now();
+  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => window.addEventListener(ev, () => (lastAct = Date.now()), { passive: true }));
+  setInterval(async () => {
+    let m = idleMin();
+    if (!m || !NP.hasSession() || NP.isMock) return;
+    if (Date.now() - lastAct > m * 60000) {
+      if (state.liveStop) state.liveStop();
+      await NP.logout().catch(() => {});
+      render();
+      toast('İşlem yapılmadığı için oturum kapatıldı');
+    }
+  }, 30000);
   // Sistem sayfası birkaç saniyede bir yenilenir; kullanıcı bir alana yazıyorsa yazdığını silme
   function formBusy() {
     let a = document.activeElement,

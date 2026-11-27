@@ -1057,6 +1057,28 @@
   // Öne çıkan servisler (AdGuard kimlikleri); listede olmayanlar gizlenir
   const AG_POPULAR = ['youtube', 'tiktok', 'instagram', 'facebook', 'twitter', 'snapchat', 'whatsapp', 'telegram', 'discord', 'roblox', 'minecraft', 'fortnite', 'steam', 'epic_games', 'twitch', 'netflix', 'spotify', 'reddit', 'pinterest', 'tinder', '9gag', 'kick'];
 
+  /* ── Güvenlik, günlük, sistem seçenekleri, ilk kurulum ─────────────────── */
+  // -> { rootPwEmpty, httpsAvailable, httpsRedirect, wizardDone, tunnelHttpHosts }
+  async function getSecurity() {
+    const r = await npCall('sec_get', {});
+    return { rootPwEmpty: !!r.root_pw_empty, httpsAvailable: !!r.https_available, httpsRedirect: !!r.https_redirect, wizardDone: !!r.wizard_done, tunnelHttpHosts: r.tunnel_http_hosts || '' };
+  }
+  async function setHttpsRedirect(on) { await npCall('sec_https', { redirect: !!on }); }
+  async function finishWizard() { await npCall('wizard_done', {}); }
+  // level: '' | 'warn' | 'err' -> [{ time, facility, level, text }]
+  async function getLog(o = {}) {
+    const r = await npCall('log_get', { lines: +o.lines || 200, q: o.q || '', level: o.level || '' });
+    return (r.lines || []).map((l) => {
+      const m = /^(\w{3} \w{3}\s+\d+ \d\d:\d\d:\d\d \d{4}) (\w+)\.(\w+) (.*)$/.exec(l);
+      return m ? { time: m[1], facility: m[2], level: m[3], text: m[4] } : { time: '', facility: '', level: 'info', text: l };
+    });
+  }
+  async function getSysOpt() {
+    const r = await npCall('sysopt_get', {});
+    return { rebootMode: r.reboot_mode || 'off', rebootHour: r.reboot_hour ?? 5, rebootDay: r.reboot_day || 1, alerts: !!r.alerts, tempLimit: r.temp_limit || 85 };
+  }
+  async function setSysOpt(o) { await npCall('sysopt_set', { reboot_mode: o.rebootMode, reboot_hour: +o.rebootHour, reboot_day: +o.rebootDay, alerts: !!o.alerts }); }
+
   /* ── Zamanlanmış hız testi ─────────────────────────────────────────────── */
   async function getSpeedSchedule() { return npCall('st_sched_get', {}); }
   async function setSpeedSchedule(o) { await npCall('st_sched_set', { enabled: !!o.enabled, hour: +o.hour, wan: o.wan || '' }); }
@@ -1454,6 +1476,18 @@
     const demoInteg = { cloudflare: true, scanner: false, vpn: false, adguard: false };
     const demoAg = { configured: false, active: false, protection: true, global: [], clients: {} };
     const demoSt = { enabled: false, hour: 4, wan: '' };
+    const demoSec = { root_pw_empty: true, https_available: false, https_redirect: false, wizard_done: false, tunnel_http_hosts: '' };
+    const demoOpt = { reboot_mode: 'off', reboot_hour: 5, reboot_day: 1, alerts: true, temp_limit: 85 };
+    const demoLog = [
+      'daemon.info dnsmasq-dhcp[1]: DHCPACK(br-lan) 192.168.1.105 da:a1:19:aa:bb:cc Galaxy-S24',
+      'daemon.notice netifd: Interface \'Turknet\' is now up',
+      'daemon.warn odhcpd[2516]: No default route present, setting ra_lifetime to 0!',
+      'user.notice netos: uyarı: Depolama alanı dolmak üzere: %91',
+      'daemon.err uhttpd[1520]: Unable to open certificate /etc/uhttpd.crt',
+      'kern.info kernel: [12345.6789] br-lan: port 2(eth1.35) entered forwarding state',
+      'authpriv.info dropbear[2513]: Child connection from 192.168.1.185:49334',
+      'daemon.info mwan3track[3011]: Check (ping) failed for target "1.1.1.1" on interface wan2 (eth2)',
+    ];
     let demoScan = null;
     const demoUpd = { current: '1.2.0', auto: false, t0: 0 };
     const demoWans = [{ name: 'Turknet', ip: '100.66.93.98', kind: 'cgnat' }, { name: 'wan2', ip: '192.168.2.212', kind: 'private' }];
@@ -1526,7 +1560,7 @@
         wan2: { status: 'offline', online: 0, offline: 3372, lost: 384, score: 0, track_ip: [{ ip: '1.1.1.1', status: 'down', latency: 0, packetloss: 100 }] } } }),
       'netpanel.sysinfo': () => { cpuT += 200 + Math.floor(Math.random() * 40); cpuI += 150 + Math.floor(Math.random() * 40);
         return { model: 'QEMU Virtual CPU version 2.5+', cores: 2, cpu: { total: cpuT, idle: cpuI }, disk: { total: 15156772864, used: 105213952 } }; },
-      'netpanel.set_password': (a) => (a.old === 'yanlis' ? { ok: false, error: 'Mevcut şifre yanlış' } : { ok: true }),
+      'netpanel.set_password': (a) => (a.old === 'yanlis' ? { ok: false, error: 'Mevcut şifre yanlış' } : ((demoSec.root_pw_empty = false), { ok: true })),
       'netpanel.web_scan': () => ({ ok: true }),
       'netpanel.sqm_config': () => ({ installed: true, offload: sqm.offload, offload_hw: false,
         scripts: ['layer_cake.qos', 'piece_of_cake.qos', 'simple.qos', 'simplest.qos', 'simplest_tbf.qos'],
@@ -1695,6 +1729,19 @@
       'netpanel.ag_client_get': (a) => ({ custom: !!demoAg.clients[a.mac], filtering: true, parental: false, safesearch: false, services: [], ...(demoAg.clients[a.mac] || {}) }),
       'netpanel.ag_client_set': (a) => { const def = a.filtering && !a.parental && !a.safesearch && !a.services.length; if (def) delete demoAg.clients[a.mac]; else demoAg.clients[a.mac] = { filtering: a.filtering, parental: a.parental, safesearch: a.safesearch, services: a.services }; return { ok: true, custom: !def }; },
       'netpanel.st_sched_get': () => ({ ...demoSt }),
+      'netpanel.sec_get': () => ({ ...demoSec }),
+      'netpanel.sec_https': (a) => { demoSec.https_redirect = !!a.redirect; return { ok: true }; },
+      'netpanel.wizard_done': () => { demoSec.wizard_done = true; return { ok: true }; },
+      'netpanel.log_get': (a) => {
+        const now = Date.now();
+        let lines = Array.from({ length: 60 }, (_, i) => `${((d) => d.toString().slice(0, 10) + ' ' + d.toTimeString().slice(0, 8) + ' ' + d.getFullYear())(new Date(now - (60 - i) * 47000))} ${demoLog[i % demoLog.length]}`);
+        if (a.level === 'err') lines = lines.filter((l) => /\.(err|crit)/.test(l));
+        else if (a.level === 'warn') lines = lines.filter((l) => /\.(warn|err|crit)/.test(l));
+        if (a.q) lines = lines.filter((l) => l.toLowerCase().includes(a.q.toLowerCase()));
+        return { lines: lines.slice(-a.lines) };
+      },
+      'netpanel.sysopt_get': () => ({ ...demoOpt }),
+      'netpanel.sysopt_set': (a) => { Object.assign(demoOpt, a); return { ok: true }; },
       'netpanel.st_sched_set': (a) => { Object.assign(demoSt, { enabled: !!a.enabled, hour: a.hour, wan: a.wan }); return { ok: true }; },
       'netpanel.integ_set': (a) => { if (a.id === 'huawei') hw.enabled = !!a.enabled; else demoInteg[a.id] = !!a.enabled; return { ok: true }; },
       'netpanel.scan_start': (a) => {
@@ -1854,7 +1901,7 @@
     getPortForwards, savePortForward, deletePortForward, setUpnp, getLan, setLan, confirmLan, revertLan,
     getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,
     getAdguard, setupAdguard, enableAdguard, connectAdguard, setAdguardProtection, getAdguardServices, getAdguardGlobal, setAdguardGlobal,
-    getAdguardClient, setAdguardClient, AG_POPULAR, getSpeedSchedule, setSpeedSchedule,
+    getAdguardClient, setAdguardClient, AG_POPULAR, getSpeedSchedule, setSpeedSchedule, getSecurity, setHttpsRedirect, finishWizard, getLog, getSysOpt, setSysOpt,
     getIntegrations, setIntegration, startScan, getScan, wakeOnLan, getUpdate, applyUpdate, getUpdateStatus, setAutoUpdate, TYPE_LABELS: TYPES,
     getSqm, setSqm, deleteSqm, setOffload, startSpeedtest, getSpeedtest, SQM_PRESETS, GRADE_TEXT, SPEED_SERVERS,
     TYPES,

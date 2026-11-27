@@ -406,9 +406,9 @@ function qr() {
 }
 
 // ══ Paket kurulumu (yalnız izinli listeler) ══
-const PKGS = { adguard: ['adguardhome'], upnp: ['miniupnpd-nftables'], wireguard: ['wireguard-tools', 'kmod-wireguard'], qr: ['qrencode'], wol: ['etherwake'] };
+const PKGS = { https: ['px5g-mbedtls'], adguard: ['adguardhome'], upnp: ['miniupnpd-nftables'], wireguard: ['wireguard-tools', 'kmod-wireguard'], qr: ['qrencode'], wol: ['etherwake'] };
 function pkgCheck(set) {
-	return { adguard: () => has('/usr/bin/AdGuardHome'), upnp: () => has('/usr/sbin/miniupnpd'), wireguard: wgInstalled, qr: () => has('/usr/bin/qrencode'), wol: () => has('/usr/sbin/etherwake') || has('/usr/bin/etherwake') }[set]();
+	return { https: () => (has('/usr/bin/px5g') || has('/etc/uhttpd.crt')) && length(trim(sh('ls /usr/lib/libustream-ssl*.so* /lib/libustream-ssl*.so* 2>/dev/null'))) > 0, adguard: () => has('/usr/bin/AdGuardHome'), upnp: () => has('/usr/sbin/miniupnpd'), wireguard: wgInstalled, qr: () => has('/usr/bin/qrencode'), wol: () => has('/usr/sbin/etherwake') || has('/usr/bin/etherwake') }[set]();
 }
 function pkg_install() {
 	const a = input(), set = a.set;
@@ -418,7 +418,7 @@ function pkg_install() {
 	if (has(st + '.run')) out({ ok: true, running: true });
 	const p = join(' ', PKGS[set]);
 	fs.writefile(st + '.run', '' + time());
-	bg(sprintf('if command -v apk >/dev/null; then apk update && apk add %s; else opkg update && opkg install %s; fi > %s.log 2>&1; echo $? > %s.rc; rm -f %s.run', p, p, st, st, st));
+	bg(sprintf('if command -v apk >/dev/null; then apk update && apk add %s; else opkg update && opkg install %s; fi > %s.log 2>&1; echo $? > %s.rc; %s rm -f %s.run', p, p, st, st, set == 'https' ? '/etc/init.d/uhttpd restart;' : '', st));
 	out({ ok: true, running: true });
 }
 function pkg_status() {

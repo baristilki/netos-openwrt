@@ -21,6 +21,8 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 - WireGuard VPN sunucusu: cihaz ekle → QR kodu telefona okut
 - Wi-Fi'yi QR kod ile paylaşma
 - Cihaz eve geldi / ayrıldı bildirimi (Telegram), günlük zamanlanmış hız testi
+- İlk kurulum sihirbazı (şifresiz router'ı algılar), HTTPS, otomatik oturum kapatma
+- Sistem günlüğü görüntüleyici, sıcaklık/disk/bellek uyarıları, zamanlı yeniden başlatma
 - Cloudflare Tunnel: token yapıştırarak ya da API token ile otomatik kurulum
   (tünel + DNS + Cloudflare Access e-posta koruması). API token router'a kaydedilmez.
 
