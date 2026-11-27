@@ -434,6 +434,16 @@ window.NETOS_EN = {
   "Sonra": "Later",
   "Uyarı üstteki zile taşındı.": "Alert moved to the bell at the top.",
   "Aç": "Open",
+  "Kesinti raporu · son # gün": "Outage report · last # days",
+  "Raporu kopyala": "Copy report",
+  "kesinti": "outages",
+  "toplam": "total",
+  "en uzun": "longest",
+  "erişilebilir": "available",
+  "Kesinti kaydı yok": "No outages recorded",
+  "Şu an kesinti var": "Outage in progress",
+  "Kesinti raporu panoya kopyalandı": "Outage report copied to clipboard",
+  "Operatöre şikâyette kanıt olarak kullanabilirsiniz. Hat yoklaması (mwan#) internete ping atamadığında kesinti sayılır.": "Use it as evidence when complaining to your ISP. An outage is counted when line monitoring (mwan3) can’t ping the internet.",
 };
 
 /* Parça çevirileri: tam eşleşme yoksa metnin içinde geçen bu parçalar değiştirilir (değişken içeren metinler için). Uzundan kısaya uygulanır. */

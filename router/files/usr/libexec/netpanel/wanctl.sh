@@ -311,7 +311,7 @@ events() {
 	local tmp ts ifc ev
 	tmp=$(mktemp)
 	# en yeni önce (tac yerine sed)
-	[ -f "$EVLOG" ] && tail -n 100 "$EVLOG" | sed '1!G;h;$!d' >"$tmp"
+	[ -f "$EVLOG" ] && tail -n 2000 "$EVLOG" | sed '1!G;h;$!d' >"$tmp"
 	json_init
 	json_add_array events
 	while IFS='	' read -r ts ifc ev; do

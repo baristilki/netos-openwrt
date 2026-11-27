@@ -324,6 +324,9 @@
     if (state.error) out.push({ id: 'conn', level: 'bad', title: 'Router’a ulaşılamıyor', text: 'Veriler güncellenemiyor; bağlantıyı kontrol edin.' });
     if (state.xSec?.rootPwEmpty) out.push({ id: 'pw', level: 'bad', title: 'Router’ın şifresi yok', text: 'Aynı ağdaki herkes bu panele, LuCI’ye ve SSH’a şifresiz girebilir.', href: '#/welcome', action: 'Şifre belirle' });
     for (let w of state.overview?.wans || []) if (w.status === 'offline' || w.online === false) out.push({ id: 'wan:' + w.name, level: 'bad', title: `${w.label || w.name} çevrimdışı`, text: 'Bu internet hattından bağlantı yok; modemi ve kabloyu kontrol edin.', href: '#/internet', action: 'İnternet' });
+    if (NP.hasSession() && !state.xNewdev && !state.xNewdevError) loadX('xNewdev', () => NP.getNewDevices(), '-');
+    let nd = (state.xNewdev?.items || []).filter((x) => x.unseen);
+    if (nd.length) out.push({ id: 'newdev:' + nd.map((x) => x.mac).join(','), level: 'warn', title: `${nd.length} yeni cihaz ağa katıldı`, text: nd.slice(0, 3).map((x) => x.hostname || NP.fmt.mac(x.mac)).join(', ') + (nd.length > 3 ? '…' : ''), href: '#/devices', action: 'Cihazlar' });
     if (state.lanPending) out.push({ id: 'lan', level: 'warn', title: 'Onay bekleyen adres değişikliği', text: 'Yeni router adresini onaylamazsanız eski ayara dönülecek.', href: '#/lan', action: 'Yerel ağ' });
     if (state.status?.offload) out.push({ id: 'offload', level: 'warn', title: 'Flow offloading açık', text: 'Cihaz hızları, hız sınırları ve oyun önceliği tam çalışmaz.', href: '#/system', action: 'Sistem' });
     for (let pt of state.xPorts?.ports || []) {
@@ -1854,6 +1857,46 @@
         '',
       )}</div><div class="wan-mode-fields"><div class="field-wrap"><label for="wan-primary">Ana hat</label><select class="field" id="wan-primary" name="primary">${w.map((x) => `<option value="${esc(x.name)}" ${(c.primary || w[0]?.name) === x.name ? 'selected' : ''}>${esc(x.label || x.name)}</option>`).join('')}</select></div><div class="weights">${w.map((x) => `<div class="field-wrap"><label>${esc(x.label || x.name)} ağırlığı</label><input class="field num" type="number" min="1" max="10" name="weight-${esc(x.name)}" value="${Math.min(10, Math.max(1, x.mwan?.weight || 1))}"></div>`).join('')}</div></div><p class="field-hint" id="weight-hint"></p><div class="form-error" id="wan-mode-error"></div><button class="btn primary" type="submit">Uygula</button></form></section>`;
   }
+  /* ── Kesinti raporu: mwan3'ün disconnected → connected olaylarından (son 30 gün) ── */
+  const fmtDur = (s) => (s < 60 ? `${Math.round(s)} sn` : s < 3600 ? `${Math.round(s / 60)} dk` : `${Math.floor(s / 3600)} sa ${Math.round((s % 3600) / 60)} dk`);
+  function outages(days = 30) {
+    let from = Date.now() - days * 864e5,
+      by = {};
+    let ev = [...(state.wanEvents || [])].filter((e) => e.iface !== '*' && /^(dis)?connected$/.test(e.event)).sort((a, b) => a.t - b.t);
+    for (let e of ev) {
+      let o = (by[e.iface] ||= { list: [], down: null });
+      if (e.event === 'disconnected') o.down ??= e.t;
+      else if (o.down != null) {
+        if (e.t >= from) o.list.push({ start: o.down, end: e.t, sec: (e.t - Math.max(o.down, from)) / 1000 });
+        o.down = null;
+      }
+    }
+    for (let o of Object.values(by)) if (o.down != null) o.list.push({ start: o.down, end: null, sec: (Date.now() - Math.max(o.down, from)) / 1000 });
+    return wanList().map((w) => {
+      let l = by[w.name]?.list || [],
+        total = l.reduce((a, x) => a + x.sec, 0);
+      return { name: w.name, label: w.label || w.name, count: l.length, total, longest: l.reduce((a, x) => Math.max(a, x.sec), 0), last: l[l.length - 1] || null, uptime: 100 - (total / (days * 864)) };
+    });
+  }
+  function outageText() {
+    let d = (t) => new Date(t).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' });
+    return outages()
+      .map((o) => {
+        let ev = [...(state.wanEvents || [])].filter((e) => e.iface === o.name && e.event === 'disconnected' && e.t >= Date.now() - 30 * 864e5).sort((a, b) => a.t - b.t);
+        return `${o.label}: son 30 günde ${o.count} kesinti, toplam ${fmtDur(o.total)}, en uzun ${fmtDur(o.longest)} (erişilebilirlik %${o.uptime.toFixed(2)})${ev.length ? '\nKesinti başlangıçları: ' + ev.map((e) => d(e.t)).join(', ') : ''}`;
+      })
+      .join('\n\n');
+  }
+  function outageCard() {
+    let rows = outages();
+    if (!rows.length) return '';
+    return `<section class="card outage-card">${cardHead('chart', 'Kesinti raporu · son 30 gün', '<button class="btn small" type="button" data-copy-outages>Raporu kopyala</button>')}<div class="outage-grid">${rows
+      .map(
+        (o) =>
+          `<div class="outage-line ${o.last && !o.last.end ? 'down' : o.count ? 'warn' : 'ok'}"><strong>${esc(o.label)}</strong><div class="outage-nums"><span><b class="num">${o.count}</b> kesinti</span><span><b class="num">${o.count ? fmtDur(o.total) : '0'}</b> toplam</span><span><b class="num">${o.count ? fmtDur(o.longest) : '—'}</b> en uzun</span><span><b class="num">%${o.uptime.toFixed(2)}</b> erişilebilir</span></div><small>${o.last ? (o.last.end ? `Son kesinti: ${new Date(o.last.start).toLocaleString('tr-TR', { dateStyle: 'short', timeStyle: 'short' })} · ${fmtDur(o.last.sec)}` : '<b>Şu an kesinti var</b>') : 'Kesinti kaydı yok'}</small></div>`,
+      )
+      .join('')}</div><p class="field-hint">Operatöre şikâyette kanıt olarak kullanabilirsiniz. Hat yoklaması (mwan3) internete ping atamadığında kesinti sayılır.</p></section>`;
+  }
   function internetPage() {
     let events = state.wanEvents.filter((x) => state.wanFilter === 'all' || x.iface === state.wanFilter),
       fmtAgo = (t) => {
@@ -1883,7 +1926,7 @@
             `<div class="event-row"><i class="event-dot ${esc(x.level)}"></i><div><strong>${esc(x.iface === '*' ? 'Sistem' : wanList().find((w) => w.name === x.iface)?.label || x.iface)}</strong><span>${esc(x.label)}</span></div><time title="${esc(new Date(x.t).toLocaleString('tr-TR'))}">${fmtAgo(x.t)}</time></div>`,
         )
         .join('') || '<div class="empty">Henüz bağlantı olayı yok.</div>'
-    }</div>${events.length > state.wanShown ? '<button class="btn small" data-more-events>Daha fazla göster</button>' : ''}</section></div>`;
+    }</div>${events.length > state.wanShown ? '<button class="btn small" data-more-events>Daha fazla göster</button>' : ''}</section>${outageCard()}</div>`;
   }
   const speedWans = () =>
     state.sqm?.wans?.length
@@ -2611,6 +2654,13 @@
         state.page = '/devices';
         render();
       }
+      return;
+    }
+    if (b.matches('[data-copy-outages]')) {
+      let txt = outageText();
+      (navigator.clipboard?.writeText(txt) || Promise.reject())
+        .then(() => toast('Kesinti raporu panoya kopyalandı'))
+        .catch(() => prompt('Raporu kopyalayın:', txt));
       return;
     }
     if (b.matches('[data-banner-close]')) {

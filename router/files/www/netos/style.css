@@ -2796,3 +2796,13 @@ input.field {
 .wifi-list { container-type: inline-size; }
 @container (max-width: 360px) { .wifi-right .pill { display: none; } .wifi-row { gap: 10px; padding: 11px; } }
 .grid > * { min-width: 0; }
+
+/* ── Kesinti raporu ── */
+.outage-card { margin-top: 18px; }
+.outage-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.outage-line { border: 1px solid var(--line); border-left: 4px solid var(--green); border-radius: 12px; padding: 12px 14px; display: grid; gap: 8px; min-width: 0; }
+.outage-line.warn { border-left-color: var(--amber); }
+.outage-line.down { border-left-color: var(--red); }
+.outage-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px; color: var(--muted); }
+.outage-nums b { display: block; font-size: 17px; color: var(--text); }
+.outage-line small { color: var(--muted); font-size: 12px; }

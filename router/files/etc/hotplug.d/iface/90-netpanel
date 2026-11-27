@@ -12,8 +12,8 @@ uci -q show firewall | sed -n "s/^firewall\.\(@zone\[[0-9]*\]\)\.name='wan'$/\1/
 LOG=/etc/netpanel/events.log
 mkdir -p /etc/netpanel
 printf '%s\t%s\t%s\n' "$(date +%s)" "$INTERFACE" "$ACTION" >>"$LOG"
-# en fazla 500 satır tut
-[ "$(wc -l <"$LOG")" -gt 500 ] && { tail -n 300 "$LOG" >"$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
+# en fazla 2000 satır tut (~50 KB; 30 günlük kesinti raporu için)
+[ "$(wc -l <"$LOG")" -gt 2000 ] && { tail -n 1500 "$LOG" >"$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
 
 # bildirim: yalnız mwan3'ün internet erişimi olayları (PPPoE yeniden bağlanırken çift mesaj olmasın)
 case "$ACTION" in
