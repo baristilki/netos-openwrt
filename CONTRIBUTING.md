@@ -29,6 +29,12 @@ Gerçek router'da denemek için README'deki kurulum adımları (scp + `install.s
 3. `api.js`: fonksiyon + `mock` içinde demo yanıtı (router'sız test edilebilsin).
 4. `app.js`: `INTEGRATIONS` listesine kayıt ve ayar kartı.
 
+## Çeviri (English)
+Arayüz metinleri Türkçe yazılır; İngilizce seçiliyse `www/netos/i18n.js` çizilen sayfadaki metinleri
+`www/netos/i18n-en.js` sözlüğüyle çevirir. Anahtar, metnin kendisidir (sayılar `#` olur:
+`"# çevrimiçi · # kayıtlı": "# online · # saved"`). Yeni bir metin eklerseniz sözlüğe karşılığını da ekleyin;
+eksik olanlar Türkçe görünür. Çevrilmemesi gereken alanlara `data-no-i18n` verin.
+
 ## Kurallar
 - Hedef: OpenWrt 22.03+ (fw4/nftables), ek paket gerektirmemek; gerekirse `install.sh` kurar.
 - Kullanıcının ağına zarar verebilecek işlemler (yeniden başlatma, WAN değişikliği) onay ister,

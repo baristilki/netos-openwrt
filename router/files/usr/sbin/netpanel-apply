@@ -26,6 +26,12 @@ gen() { # $1 = 1 ise sayaçlı
 	# Saat planı (ebeveyn kontrolü): collect.sh her dakika bu setleri günceller
 	echo "	set schedmac { type ether_addr; size 512; }"
 	echo "	set schedip { type ipv4_addr; size 512; }"
+	# giriş koruması: hatalı denemeyle kilitlenen adresler (authguard.sh)
+	echo "	set ban { type ipv4_addr; size 1024; flags timeout; }"
+	echo "	chain input {"
+	echo "		type filter hook input priority -5; policy accept;"
+	echo "		ip saddr @ban tcp dport { 22, 80, 443 } drop"
+	echo "	}"
 	echo "	chain forward {"
 	echo "		type filter hook forward priority -5; policy accept;"
 	echo "		ether saddr @schedmac drop"
@@ -75,3 +81,4 @@ fi
 # tablo yeniden kuruldu: saat planı setlerini hemen doldur
 # (kullanım sayaçları da sıfırlandı; collect.sh bunu "yeni değer < önceki" olarak algılayıp doğru sayar)
 /usr/libexec/netpanel/collect.sh sched force >/dev/null 2>&1
+/usr/libexec/netpanel/authguard.sh restore >/dev/null 2>&1

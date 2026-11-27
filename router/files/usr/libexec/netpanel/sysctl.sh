@@ -23,9 +23,9 @@ sec_get() {
 	awk -F: '$1 == "root" { exit ($2 == "" ? 0 : 1) }' /etc/shadow 2>/dev/null && empty=1
 	# Cloudflare tüneli panele http (80) üzerinden gidiyorsa https yönlendirmesi döngü yapar
 	hosts=$(uci -q get netpanel.cloudflare.host | tr ' ' '\n' | awk -F'|' -v ip="$(uci -q get network.lan.ipaddr | cut -d/ -f1)" '$2 ~ "^http://" ip "(:80)?/?$" { printf "%s%s", (n++ ? "," : ""), $1 }')
-	printf '{"root_pw_empty":%s,"https_available":%s,"https_redirect":%s,"wizard_done":%s,"tunnel_http_hosts":%s}\n' \
+	printf '{"root_pw_empty":%s,"https_available":%s,"https_redirect":%s,"wizard_done":%s,"strict_login":%s,"tunnel_http_hosts":%s}\n' \
 		"$(jb $empty)" "$(https_available && echo true || echo false)" "$(jb "$(uci -q get uhttpd.main.redirect_https)")" \
-		"$(jb "$(uci -q get netpanel.main.wizard)")" "$(jstr "$hosts")"
+		"$(jb "$(uci -q get netpanel.main.wizard)")" "$(strict_on && echo true || echo false)" "$(jstr "$hosts")"
 }
 
 sec_https() {
@@ -37,6 +37,26 @@ sec_https() {
 	uci commit uhttpd
 	# yanıt döndükten sonra yeniden başlat (bu bağlantı kopar)
 	(sleep 2; /etc/init.d/uhttpd restart) >/dev/null 2>&1 </dev/null &
+	echo '{"ok":true}'
+}
+
+# Sıkı giriş: web'den doğrudan ubus session.login kapalı; giriş yalnız NetOS geçidi (deneme sınırlı)
+# ve LuCI formu (günlükten izlenir) üzerinden. Home Assistant gibi ubus entegrasyonları giriş yapamaz.
+UNAUTH=/usr/share/rpcd/acl.d/unauthenticated.json
+strict_on() { [ -f "$UNAUTH" ] && ! grep -q '"login"' "$UNAUTH"; }
+sec_strict() {
+	local input en
+	input=$(cat); json_load "$input" 2>/dev/null || err "Geçersiz istek"
+	json_get_var en enabled
+	[ -f /www/cgi-bin/netos-auth ] || err "NetOS giriş geçidi kurulu değil"
+	if [ "$en" = 1 ]; then
+		[ -f /etc/netpanel/unauthenticated.json.orig ] || cp "$UNAUTH" /etc/netpanel/unauthenticated.json.orig
+		printf '{\n\t"unauthenticated": {\n\t\t"description": "Access controls for unauthenticated requests (NetOS: login via /cgi-bin/netos-auth)",\n\t\t"read": { "ubus": { "session": [ "access" ] } }\n\t}\n}\n' >"$UNAUTH"
+	else
+		if [ -f /etc/netpanel/unauthenticated.json.orig ]; then cp /etc/netpanel/unauthenticated.json.orig "$UNAUTH"
+		else printf '{\n\t"unauthenticated": {\n\t\t"description": "Access controls for unauthenticated requests",\n\t\t"read": { "ubus": { "session": [ "access", "login" ] } }\n\t}\n}\n' >"$UNAUTH"; fi
+	fi
+	/etc/init.d/rpcd reload >/dev/null 2>&1
 	echo '{"ok":true}'
 }
 
@@ -125,7 +145,7 @@ check() {
 }
 
 case "$1" in
-sec_get | sec_https | wizard_done | log_get | sysopt_get | sysopt_set | check) "$1" ;;
+sec_get | sec_https | sec_strict | wizard_done | log_get | sysopt_get | sysopt_set | check) "$1" ;;
 *) echo "kullanım: $0 sec_get|sec_https|wizard_done|log_get|sysopt_get|sysopt_set|check" >&2; exit 1 ;;
 esac
 exit 0

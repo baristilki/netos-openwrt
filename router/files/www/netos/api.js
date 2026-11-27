@@ -202,6 +202,23 @@
 
   async function login(username, password) {
     let d;
+    // Önce NetOS giriş geçidi (hatalı deneme sınırı); kurulu değilse doğrudan ubus
+    if (!MOCK) {
+      let res = null;
+      try {
+        res = await fetch('/cgi-bin/netos-auth', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username || 'root', password: password || '' }) });
+      } catch (_) {}
+      if (res && res.status !== 404) {
+        let j = {};
+        try {
+          j = await res.json();
+        } catch (_) {}
+        if (!j.ok) throw new ApiError(j.error || 'Giriş başarısız', res.status === 429 ? 'locked' : 'badpass');
+        sid = j.ubus_rpc_session;
+        store.set(sid);
+        return;
+      }
+    }
     try {
       d = await ubus('session', 'login', { username: username || 'root', password: password || '' }, { anon: true });
     } catch (e) {
@@ -1095,8 +1112,15 @@
   // -> { rootPwEmpty, httpsAvailable, httpsRedirect, wizardDone, tunnelHttpHosts }
   async function getSecurity() {
     const r = await npCall('sec_get', {});
-    return { rootPwEmpty: !!r.root_pw_empty, httpsAvailable: !!r.https_available, httpsRedirect: !!r.https_redirect, wizardDone: !!r.wizard_done, tunnelHttpHosts: r.tunnel_http_hosts || '' };
+    return { rootPwEmpty: !!r.root_pw_empty, httpsAvailable: !!r.https_available, httpsRedirect: !!r.https_redirect, wizardDone: !!r.wizard_done, strictLogin: !!r.strict_login, tunnelHttpHosts: r.tunnel_http_hosts || '' };
   }
+  async function setStrictLogin(on) { await npCall('sec_strict', { enabled: !!on }); }
+  // -> { locked:[{ip, until(ms), source, count}], max }
+  async function getLockouts() {
+    const r = await npCall('auth_list', {});
+    return { max: r.max || 5, locked: (r.locked || []).map((x) => ({ ...x, until: x.until * 1000 })) };
+  }
+  async function unbanIp(ip) { await npCall('auth_unban', { ip }); }
   async function setHttpsRedirect(on) { await npCall('sec_https', { redirect: !!on }); }
   async function finishWizard() { await npCall('wizard_done', {}); }
   // level: '' | 'warn' | 'err' -> [{ time, facility, level, text }]
@@ -1512,7 +1536,8 @@
     const demoInteg = { cloudflare: true, scanner: false, vpn: false, adguard: false };
     const demoAg = { configured: false, active: false, protection: true, global: [], clients: {} };
     const demoSt = { enabled: false, hour: 4, wan: '' };
-    const demoSec = { root_pw_empty: true, https_available: false, https_redirect: false, wizard_done: false, tunnel_http_hosts: '' };
+    const demoSec = { root_pw_empty: true, https_available: false, https_redirect: false, wizard_done: false, strict_login: false, tunnel_http_hosts: '' };
+    let demoLocked = [{ ip: '192.168.1.214', until: Math.floor(Date.now() / 1000) + 240, source: 'LuCI', count: 1 }];
     const demoOpt = { reboot_mode: 'off', reboot_hour: 5, reboot_day: 1, alerts: true, temp_limit: 85 };
     const demoLog = [
       'daemon.info dnsmasq-dhcp[1]: DHCPACK(br-lan) 192.168.1.105 da:a1:19:aa:bb:cc Galaxy-S24',
@@ -1772,6 +1797,9 @@
       'netpanel.tp_set': (a) => { demoTp.bands[a.band].enabled = !!a.enabled; return { ok: true }; },
       'netpanel.tp_wifi_set': (a) => { if (a.ssid) demoTp.bands[a.band].ssid = a.ssid; return { ok: true }; },
       'netpanel.sec_get': () => ({ ...demoSec }),
+      'netpanel.sec_strict': (a) => { demoSec.strict_login = !!a.enabled; return { ok: true }; },
+      'netpanel.auth_list': () => ({ max: 5, locked: demoLocked.filter((x) => x.until * 1000 > Date.now()) }),
+      'netpanel.auth_unban': (a) => { demoLocked = demoLocked.filter((x) => x.ip !== a.ip); return { ok: true }; },
       'netpanel.sec_https': (a) => { demoSec.https_redirect = !!a.redirect; return { ok: true }; },
       'netpanel.wizard_done': () => { demoSec.wizard_done = true; return { ok: true }; },
       'netpanel.log_get': (a) => {
@@ -1946,7 +1974,7 @@
     getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,
     getTplink, setTplinkConfig, setTplinkBand, saveTplinkWifi,
     getAdguard, setupAdguard, enableAdguard, connectAdguard, setAdguardProtection, getAdguardServices, getAdguardGlobal, setAdguardGlobal,
-    getAdguardClient, setAdguardClient, AG_POPULAR, getSpeedSchedule, setSpeedSchedule, getSecurity, setHttpsRedirect, finishWizard, getLog, getSysOpt, setSysOpt,
+    getAdguardClient, setAdguardClient, AG_POPULAR, getSpeedSchedule, setSpeedSchedule, getSecurity, setHttpsRedirect, setStrictLogin, getLockouts, unbanIp, finishWizard, getLog, getSysOpt, setSysOpt,
     getIntegrations, setIntegration, startScan, getScan, wakeOnLan, getUpdate, applyUpdate, getUpdateStatus, setAutoUpdate, TYPE_LABELS: TYPES,
     getSqm, setSqm, deleteSqm, setOffload, startSpeedtest, getSpeedtest, SQM_PRESETS, GRADE_TEXT, SPEED_SERVERS,
     TYPES,

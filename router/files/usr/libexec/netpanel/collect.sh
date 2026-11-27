@@ -184,6 +184,7 @@ all)
 	stsched
 	presence &
 	/usr/libexec/netpanel/sysctl.sh check
+	/usr/libexec/netpanel/authguard.sh scan
 	usage
 	ping_hist
 	;;

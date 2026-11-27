@@ -1,0 +1,48 @@
+#!/usr/bin/ucode
+// NetOS giriş geçidi: hatalı deneme sınırı uygulayarak rpcd oturumu açar.
+// POST JSON {username, password} -> {ok, ubus_rpc_session, timeout} | {ok:false, error, remaining, locked}
+// Şifre komut satırına hiç yazılmaz; ubus'a doğrudan iletilir.
+
+import * as fs from 'fs';
+import * as ubus from 'ubus';
+
+const GUARD = getenv('NP_GUARD') || '/usr/libexec/netpanel/authguard.sh';
+
+function reply(status, o) {
+	print('Status: ' + status + '\r\nContent-Type: application/json\r\nCache-Control: no-store\r\nX-Content-Type-Options: nosniff\r\n\r\n');
+	print(sprintf('%J', o), '\n');
+	exit(0);
+}
+function q(s) { return "'" + replace('' + s, "'", "'\\''") + "'"; }
+function sh(cmd) { const p = fs.popen(cmd, 'r'); if (!p) return ''; const r = p.read('all'); p.close(); return trim(r ?? ''); }
+
+if (getenv('REQUEST_METHOD') != 'POST') reply('405 Method Not Allowed', { ok: false, error: 'POST gerekli' });
+
+// istemci adresi; Cloudflare tüneli (yerel bağlantı) ise gerçek adres başlıktan
+let ip = getenv('REMOTE_ADDR') || '';
+if ((ip == '127.0.0.1' || ip == '::1') && getenv('HTTP_CF_CONNECTING_IP')) ip = getenv('HTTP_CF_CONNECTING_IP');
+if (!match(ip, /^[0-9a-fA-F.:]{2,45}$/)) ip = 'bilinmiyor';
+
+const left = int(sh(GUARD + ' check ' + q(ip)) || 0);
+if (left > 0) reply('429 Too Many Requests', { ok: false, locked: left, error: sprintf('Çok fazla hatalı deneme. %d dakika sonra tekrar deneyin.', int((left + 59) / 60)) });
+
+const len = int(getenv('CONTENT_LENGTH') || 0);
+if (len <= 0 || len > 4096) reply('400 Bad Request', { ok: false, error: 'Geçersiz istek' });
+let body = null;
+try { body = json(fs.stdin.read(len)); } catch (e) { body = null; }
+if (type(body) != 'object') reply('400 Bad Request', { ok: false, error: 'Geçersiz istek' });
+
+const user = '' + (body.username || 'root'), pass = '' + (body.password ?? '');
+if (length(user) > 32 || !match(user, /^[A-Za-z0-9_.-]+$/)) reply('400 Bad Request', { ok: false, error: 'Geçersiz kullanıcı adı' });
+
+const conn = ubus.connect();
+const r = conn ? conn.call('session', 'login', { username: user, password: pass }) : null;
+if (type(r?.ubus_rpc_session) == 'string') {
+	system(GUARD + ' ok ' + q(ip));
+	system('logger -p authpriv.info -t netos ' + q('giriş: ' + user + ', ' + ip));
+	reply('200 OK', { ok: true, ubus_rpc_session: r.ubus_rpc_session, timeout: r.timeout ?? 300 });
+}
+const f = split(sh(GUARD + ' fail ' + q(ip) + ' NetOS'), ' ');
+const remaining = int(f[0] ?? 0), lock = int(f[1] ?? 0);
+if (lock > 0) reply('429 Too Many Requests', { ok: false, locked: lock, error: sprintf('Çok fazla hatalı deneme. Bu cihaz %d dakika engellendi.', int((lock + 59) / 60)) });
+reply('403 Forbidden', { ok: false, remaining: remaining, error: remaining <= 2 ? sprintf('Kullanıcı adı veya şifre hatalı. %d deneme hakkınız kaldı.', remaining) : 'Kullanıcı adı veya şifre hatalı' });

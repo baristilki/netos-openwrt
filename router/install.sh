@@ -14,6 +14,7 @@ cp -f "$SRC/usr/share/rpcd/acl.d/netpanel.json" /usr/share/rpcd/acl.d/
 cp -f "$SRC/etc/init.d/netpanel" /etc/init.d/
 cp -f "$SRC/etc/hotplug.d/dhcp/90-netpanel" /etc/hotplug.d/dhcp/
 cp -f "$SRC/etc/hotplug.d/iface/90-netpanel" /etc/hotplug.d/iface/
+mkdir -p /www/cgi-bin && cp -f "$SRC/www/cgi-bin/netos-auth" /www/cgi-bin/netos-auth
 [ -f /etc/config/netpanel ] || cp "$SRC/etc/config/netpanel" /etc/config/
 rm -rf /www/netos.new && cp -rf "$SRC/www/netos" /www/netos.new && rm -rf /www/netos && mv /www/netos.new /www/netos
 cp -f "$SRC/../VERSION" /usr/share/netpanel/version 2>/dev/null
@@ -23,10 +24,10 @@ printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content=
 
 # Windows'tan gelen CRLF satır sonlarını temizle
 for f in /usr/share/netpanel/common.sh /usr/libexec/rpcd/netpanel /usr/sbin/netpanel-apply /usr/libexec/netpanel/* \
-	/etc/init.d/netpanel /etc/hotplug.d/dhcp/90-netpanel /etc/hotplug.d/iface/90-netpanel /etc/config/netpanel; do
+	/etc/init.d/netpanel /etc/hotplug.d/dhcp/90-netpanel /etc/hotplug.d/iface/90-netpanel /etc/config/netpanel /www/cgi-bin/netos-auth; do
 	sed -i 's/\r$//' "$f"
 done
-chmod 755 /usr/libexec/rpcd/netpanel /usr/sbin/netpanel-apply /usr/libexec/netpanel/* \
+chmod 755 /usr/libexec/rpcd/netpanel /usr/sbin/netpanel-apply /usr/libexec/netpanel/* /www/cgi-bin/netos-auth \
 	/etc/init.d/netpanel /etc/hotplug.d/dhcp/90-netpanel /etc/hotplug.d/iface/90-netpanel
 chmod 600 /etc/config/netpanel
 

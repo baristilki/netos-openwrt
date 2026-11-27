@@ -36,7 +36,8 @@
 					"log_get",
 					"sysopt_get",
 					"tp_status",
-					"conn_list"
+					"conn_list",
+					"auth_list"
 				],
 				"system": [
 					"board",
@@ -139,7 +140,9 @@
 					"tp_config",
 					"tp_set",
 					"tp_wifi_set",
-					"fw_set"
+					"fw_set",
+					"sec_strict",
+					"auth_unban"
 				],
 				"system": [
 					"reboot"

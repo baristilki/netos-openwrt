@@ -207,7 +207,7 @@
     let bottom =
       mobileMain.map(([p, i, t]) => `<a href="#${p}" class="${isActive(p) ? 'active' : ''}">${icon(i)}<span>${p === '/' ? 'Ana' : p === '/devices' ? 'Cihaz' : t}</span></a>`).join('') +
       `<a href="#/more" class="${moreActive ? 'active' : ''}">${icon('menu')}<span>Menü</span></a>`;
-    return `<aside class="sidebar"><div class="brand brand-center">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span><span class="brand-ver">v${esc(state.status?.version || APP_VERSION)} · ${esc(fw)}</span></div><nav class="nav">${side}</nav><div class="sidebar-foot"><button class="logout-btn" type="button" data-logout>${icon('logout')}<span>Çıkış yap</span></button></div></aside><div class="main"><header class="topbar"><div class="mobile-brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><div class="top-status">${state.error ? '<span class="pill"><i class="dot bad"></i> Bağlantı sorunu</span>' : ''}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${state.overview ? esc(state.overview.hostname) : 'NetOS'}</span>${themeButton()}</div></header><main class="content" id="content"></main></div><nav class="bottom-nav">${bottom}</nav><div id="drawer-host"></div><div class="toast" id="toast" role="status"></div>`;
+    return `<aside class="sidebar"><div class="brand brand-center">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span><span class="brand-ver">v${esc(state.status?.version || APP_VERSION)} · ${esc(fw)}</span></div><nav class="nav">${side}</nav><div class="sidebar-foot"><button class="logout-btn" type="button" data-logout>${icon('logout')}<span>Çıkış yap</span></button></div></aside><div class="main"><header class="topbar"><div class="mobile-brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><div class="top-status">${state.error ? '<span class="pill"><i class="dot bad"></i> Bağlantı sorunu</span>' : ''}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${state.overview ? esc(state.overview.hostname) : 'NetOS'}</span>${langButton()}${themeButton()}</div></header><main class="content" id="content"></main></div><nav class="bottom-nav">${bottom}</nav><div id="drawer-host"></div><div class="toast" id="toast" role="status"></div>`;
   }
   // Mobil "Menü" sayfası: alt menüye sığmayan bölümler + tema + çıkış
   function morePage() {
@@ -1489,11 +1489,27 @@
         ${!s.httpsAvailable ? pkgGate('https', 'HTTPS', '~60 KB') : `<div class="toggle-line"><div><strong>Paneli her zaman HTTPS ile aç</strong><p>http:// adresleri https://’e yönlenir. Sertifika routerın kendisine ait olduğu için tarayıcı ilk girişte “güvenli değil” uyarısı gösterir; “Gelişmiş > Devam et” ile geçebilirsiniz.</p></div><input class="switch" type="checkbox" data-https${s.httpsRedirect ? ' checked' : ''}></div>
           <p class="field-hint">Şifreli adres: <a href="https://${esc(host)}/netos/">https://${esc(host)}/netos/</a></p>
           ${s.tunnelHttpHosts ? `<p class="field-hint warn-text">Cloudflare tünelindeki ${esc(s.tunnelHttpHosts)} panele http (80) üzerinden gidiyor; yönlendirme açılırsa döngüye girer. Tünel hedefini https://${esc(host)}:443 yapın.</p>` : ''}`}
+        <h3 class="x-sub">Giriş koruması</h3>
+        <p class="field-hint">15 dakika içinde 5 hatalı giriş denemesi yapan cihaz 5 dakika (tekrarında 15 ve 60 dakika) engellenir. NetOS, LuCI ve SSH girişleri birlikte sayılır; Telegram açıksa haber verilir.</p>
+        ${lockoutList()}
+        <div class="toggle-line"><div><strong>Sıkı mod</strong><p>Web’den doğrudan ubus girişini kapatır; giriş yalnız NetOS ve LuCI üzerinden (deneme sınırıyla) yapılır. Home Assistant gibi ubus ile bağlanan entegrasyonlar çalışmaz.</p></div><input class="switch" type="checkbox" data-strict${s.strictLogin ? ' checked' : ''}></div>
         <h3 class="x-sub">Otomatik oturum kapatma</h3>
         <div class="x-inline"><select class="field" id="idle-min">${[[0, 'Kapalı'], [15, '15 dakika'], [30, '30 dakika'], [60, '1 saat']].map(([v, t]) => `<option value="${v}"${idleMin() === v ? ' selected' : ''}>${t} işlem yapılmazsa</option>`).join('')}</select></div>
         <p class="field-hint">Bu tarayıcı için geçerlidir; ortak bilgisayarlarda açık bırakılan oturumları kapatır.</p>`;
     }
     return `<section class="card span-6" id="sec-card">${cardHead('lock', 'Güvenlik')}${body}</section>`;
+  }
+  function lockoutList() {
+    if (!state.xLock && !state.xLockError) loadX('xLock', () => NP.getLockouts(), '/system');
+    let l = state.xLock;
+    if (!l) return '';
+    if (!l.locked.length) return '<div class="sec-ok">✓ Şu an engelli cihaz yok</div>';
+    return `<div class="pf-list">${l.locked
+      .map((x) => {
+        let c = state.clients.find((y) => y.ip === x.ip);
+        return `<div class="pf-row"><div class="pf-name"><strong>${esc(c ? c.displayName : x.ip)}</strong><small class="num">${c ? esc(x.ip) + ' · ' : ''}${esc(x.source)}</small></div><div class="vpn-meta">${Math.max(1, Math.round((x.until - Date.now()) / 60000))} dk kaldı</div><div class="pf-act"><button class="btn small" type="button" data-unban="${esc(x.ip)}">Kilidi kaldır</button></div></div>`;
+      })
+      .join('')}</div>`;
   }
   function maintenanceCard() {
     if (!state.xOpt && !state.xOptError) loadX('xOpt', () => NP.getSysOpt(), '/system');
@@ -1966,6 +1982,10 @@
   }
   // gece / gündüz modu
   const isDark = () => document.documentElement.dataset.theme === 'dark';
+  function langButton() {
+    let l = window.NetI18n?.lang || 'tr';
+    return `<div class="lang-seg" role="group" aria-label="Dil / Language" data-no-i18n><button type="button" class="${l === 'tr' ? 'active' : ''}" data-lang="tr" aria-pressed="${l === 'tr'}">TR</button><button type="button" class="${l === 'en' ? 'active' : ''}" data-lang="en" aria-pressed="${l === 'en'}">EN</button></div>`;
+  }
   function themeButton() {
     let d = isDark();
     return `<button class="theme-btn" type="button" data-theme-toggle title="${d ? 'Gündüz moduna geç' : 'Gece moduna geç'}" aria-label="${d ? 'Gündüz moduna geç' : 'Gece moduna geç'}">${icon(d ? 'sun' : 'moon')}</button>`;
@@ -1980,6 +2000,12 @@
     document.querySelectorAll('[data-theme-toggle]').forEach((b) => b.outerHTML = themeButton());
   }
   document.addEventListener('click', (e) => {
+    let lb = e.target.closest('[data-lang]');
+    if (lb && window.NetI18n && lb.dataset.lang !== NetI18n.lang) {
+      NetI18n.set(lb.dataset.lang);
+      location.reload();
+      return;
+    }
     if (e.target.closest('[data-theme-toggle]')) setTheme(isDark() ? 'light' : 'dark');
     if (e.target.closest('[data-theme-toggle-row]')) {
       setTheme(isDark() ? 'light' : 'dark');
@@ -1987,7 +2013,7 @@
     }
   });
   function login() {
-    root.innerHTML = `<main class="login-screen"><div class="login-theme">${themeButton()}</div><form class="login-card" id="login-form"><div class="brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><h1>Tekrar hoş geldiniz</h1><p>Ev ağınıza güvenli şekilde giriş yapın.</p><div class="field-wrap"><label for="username">Kullanıcı adı</label><input class="field" id="username" name="username" autocomplete="username" value="root"></div><div class="field-wrap"><label for="password">Şifre</label><input class="field" id="password" name="password" type="password" autocomplete="current-password"></div><div class="login-error" id="login-error" role="alert"></div><button class="btn primary" type="submit">Giriş yap</button>${NP.isMock ? '<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:12px">Önizleme modunda herhangi bir şifre kabul edilir.</div>' : ''}</form></main>`;
+    root.innerHTML = `<main class="login-screen"><div class="login-theme">${langButton()}${themeButton()}</div><form class="login-card" id="login-form"><div class="brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><h1>Tekrar hoş geldiniz</h1><p>Ev ağınıza güvenli şekilde giriş yapın.</p><div class="field-wrap"><label for="username">Kullanıcı adı</label><input class="field" id="username" name="username" autocomplete="username" value="root"></div><div class="field-wrap"><label for="password">Şifre</label><input class="field" id="password" name="password" type="password" autocomplete="current-password"></div><div class="login-error" id="login-error" role="alert"></div><button class="btn primary" type="submit">Giriş yap</button>${NP.isMock ? '<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:12px">Önizleme modunda herhangi bir şifre kabul edilir.</div>' : ''}</form></main>`;
   }
   function openClient(mac, changeHash = true) {
     let c = state.clients.find((x) => x.mac === mac);
@@ -2120,7 +2146,7 @@
     const top = document.querySelector('.top-status');
     if (!top) return;
     let connection = state.error ? '<span class="pill"><i class="dot bad"></i> Bağlantı sorunu</span>' : '';
-    top.innerHTML = `${connection}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${esc(state.overview?.hostname || 'NetOS')}</span>${themeButton()}`;
+    top.innerHTML = `${connection}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${esc(state.overview?.hostname || 'NetOS')}</span>${langButton()}${themeButton()}`;
   }
   function updateHomeLive() {
     let fresh = home();
@@ -3947,6 +3973,32 @@
     }
     done();
   });
+  // ── Giriş koruması: olaylar ──
+  root.addEventListener('click', async (e) => {
+    let b = e.target.closest('[data-unban]');
+    if (!b) return;
+    try {
+      await NP.unbanIp(b.dataset.unban);
+      toast('Kilit kaldırıldı');
+    } catch (x) {
+      toast(x.message);
+    }
+    state.xLock = null;
+    render();
+  });
+  root.addEventListener('change', async (e) => {
+    let t = e.target;
+    if (!t.matches('[data-strict]')) return;
+    if (t.checked && !confirm('Sıkı mod açılsın mı? Home Assistant gibi ubus üzerinden bağlanan uygulamalar giriş yapamaz.')) return (t.checked = false);
+    try {
+      await NP.setStrictLogin(t.checked);
+      toast(t.checked ? 'Sıkı giriş modu açıldı' : 'Sıkı giriş modu kapatıldı');
+    } catch (x) {
+      t.checked = !t.checked;
+      toast(x.message);
+    }
+    state.xSec = null;
+  });
   // ── Güvenlik / bakım / günlük / sihirbaz: olaylar ──
   root.addEventListener('change', async (e) => {
     let t = e.target;
@@ -4125,6 +4177,7 @@
     render();
   });
   state.page = location.hash.slice(1) || '/'; // ilk açılışta adresteki sayfayı kullan
+  window.NetI18n?.watch(root);
   async function loadSpeedData() {
     if (state.page !== '/speed' || !NP.hasSession()) return;
     try {

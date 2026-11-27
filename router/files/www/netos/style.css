@@ -2730,3 +2730,11 @@ input.field {
 .wiz-form .field-wrap { display: grid; gap: 5px; margin-bottom: 12px; }
 .wiz-links { display: grid; gap: 8px; margin: 12px 0; }
 @media (max-width: 767px) { .log-line { grid-template-columns: 1fr; gap: 0; } .log-lv { display: none; } }
+
+/* ═══ Sabit üst bar + dil seçici ═══ */
+.topbar { position: sticky; top: 0; z-index: 7; backdrop-filter: saturate(1.4) blur(8px); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+.lang-seg { display: inline-flex; padding: 2px; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); }
+.lang-seg button { border: 0; background: none; color: var(--muted); font: inherit; font-size: 11px; font-weight: 750; letter-spacing: .04em; padding: 5px 8px; border-radius: 7px; cursor: pointer; }
+.lang-seg button.active { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px #0002; }
+.login-theme { display: flex; gap: 8px; align-items: center; }
+@media (max-width: 767px) { .top-host { display: none; } }
