@@ -1022,10 +1022,31 @@
   // -> { huawei, cloudflare, scanner, cloudflared (paket kurulu mu), curl }
   async function getIntegrations() {
     const r = await npCall('integ_get', {});
-    return { huawei: !!r.huawei, cloudflare: !!r.cloudflare, scanner: !!r.scanner, vpn: !!r.vpn, adguard: !!r.adguard,
+    return { huawei: !!r.huawei, tplink: !!r.tplink, cloudflare: !!r.cloudflare, scanner: !!r.scanner, vpn: !!r.vpn, adguard: !!r.adguard,
       cloudflared: !!r.cloudflared, adguardhome: !!r.adguardhome, curl: !!r.curl };
   }
   async function setIntegration(id, enabled) { await npCall('integ_set', { id, enabled: !!enabled }); }
+
+  /* ── TP-Link Archer (deneysel) ────────────────────────────────────────── */
+  // -> { enabled, host, username, passwordSet, connected, error, bands:[{band, bandLabel, enabled, ssid}] }
+  async function getTplink() {
+    const r = await npCall('tp_status', {});
+    return { enabled: !!r.enabled, host: r.host || '', username: r.username || 'admin', passwordSet: !!r.password_set, connected: !!r.connected, error: r.error || '',
+      bands: (r.bands || []).map((b) => ({ band: b.band, bandLabel: fmt.band(b.band), enabled: !!b.enabled, ssid: b.ssid || '' })) };
+  }
+  async function setTplinkConfig(o) {
+    const a = {};
+    if (o.host != null) { if (!validate.ip(o.host)) throw new ApiError('Geçerli bir IP adresi girin', 'validate'); a.host = o.host; }
+    if (o.username != null) a.username = String(o.username).trim() || 'admin';
+    if (o.password) a.password = String(o.password);
+    if (o.enabled != null) a.enabled = !!o.enabled;
+    await npCall('tp_config', a);
+  }
+  async function setTplinkBand(band, enabled) { await npCall('tp_set', { band, enabled: !!enabled }); }
+  async function saveTplinkWifi(band, o) {
+    if (o.password && !validate.wifiKey(o.password)) throw new ApiError('Şifre 8-63 karakter olmalı', 'validate');
+    await npCall('tp_wifi_set', { band, ssid: o.ssid || '', password: o.password || '' });
+  }
 
   /* ── AdGuard Home ──────────────────────────────────────────────────────── */
   // -> { installed, configured, running, active (DNS'i AdGuard veriyor), creds, webPort, lanIp,
@@ -1473,6 +1494,7 @@
     ] };
     const demoNotify = { enabled: false, chat_id: '', token_set: false, wan: true, newdev: true, curl: true };
     const demoTz = { zonename: 'UTC', timezone: 'GMT0' };
+    const demoTp = { enabled: false, host: '', username: 'admin', pw: false, bands: { '2g': { enabled: true, ssid: 'TP-Link_BE230' }, '5g': { enabled: true, ssid: 'TP-Link_BE230_5G' } } };
     const demoInteg = { cloudflare: true, scanner: false, vpn: false, adguard: false };
     const demoAg = { configured: false, active: false, protection: true, global: [], clients: {} };
     const demoSt = { enabled: false, hour: 4, wan: '' };
@@ -1714,7 +1736,7 @@
       'netpanel.backup_create': () => ({ ok: true, name: 'netos-yedek-demo.tar.gz', size: 18, data: btoa('NetOS demo yedek\n') }),
       'netpanel.backup_restore': (a) => (a.data && a.data.length > 10 ? { ok: false, error: 'Demo modunda geri yükleme yapılmaz' } : { ok: false, error: 'Bu bir OpenWrt yedeği değil (etc/config yok)' }),
       'netpanel.cf_status': () => JSON.parse(JSON.stringify(demoCf)),
-      'netpanel.integ_get': () => ({ huawei: !!hw.enabled, cloudflare: demoInteg.cloudflare, scanner: demoInteg.scanner, vpn: demoInteg.vpn, adguard: demoInteg.adguard, cloudflared: true, adguardhome: true, curl: true }),
+      'netpanel.integ_get': () => ({ huawei: !!hw.enabled, cloudflare: demoInteg.cloudflare, scanner: demoInteg.scanner, vpn: demoInteg.vpn, adguard: demoInteg.adguard, tplink: demoTp.enabled, cloudflared: true, adguardhome: true, curl: true }),
       'netpanel.ag_status': () => ({ installed: true, configured: demoAg.configured, running: demoAg.configured, active: demoAg.active, creds: demoAg.configured, web_port: 3000, lan_ip: '192.168.1.1',
         stats: demoAg.configured ? { protection: demoAg.protection, version: '0.107.73', disabled_until: null, queries: 48213, blocked: 9137, avg_ms: 11.4,
           top_blocked: [['googleads.g.doubleclick.net', 1843], ['graph.facebook.com', 1210], ['app-measurement.com', 977], ['mcs.tiktokv.com', 702], ['data.mistat.xiaomi.com', 611], ['ads.youtube.com', 433]].map(([name, count]) => ({ name, count })),
@@ -1729,6 +1751,12 @@
       'netpanel.ag_client_get': (a) => ({ custom: !!demoAg.clients[a.mac], filtering: true, parental: false, safesearch: false, services: [], ...(demoAg.clients[a.mac] || {}) }),
       'netpanel.ag_client_set': (a) => { const def = a.filtering && !a.parental && !a.safesearch && !a.services.length; if (def) delete demoAg.clients[a.mac]; else demoAg.clients[a.mac] = { filtering: a.filtering, parental: a.parental, safesearch: a.safesearch, services: a.services }; return { ok: true, custom: !def }; },
       'netpanel.st_sched_get': () => ({ ...demoSt }),
+      'netpanel.tp_status': () => ({ enabled: demoTp.enabled, host: demoTp.host, username: demoTp.username, password_set: demoTp.pw,
+        connected: demoTp.enabled && demoTp.pw && !!demoTp.host, error: demoTp.enabled && !demoTp.pw ? 'TP-Link şifresi girilmedi' : '',
+        bands: demoTp.enabled && demoTp.pw ? Object.entries(demoTp.bands).map(([band, b]) => ({ band, ...b })) : [] }),
+      'netpanel.tp_config': (a) => { if (a.host) demoTp.host = a.host; if (a.username) demoTp.username = a.username; if (a.password) demoTp.pw = true; if (a.enabled != null) demoTp.enabled = a.enabled; return { ok: true }; },
+      'netpanel.tp_set': (a) => { demoTp.bands[a.band].enabled = !!a.enabled; return { ok: true }; },
+      'netpanel.tp_wifi_set': (a) => { if (a.ssid) demoTp.bands[a.band].ssid = a.ssid; return { ok: true }; },
       'netpanel.sec_get': () => ({ ...demoSec }),
       'netpanel.sec_https': (a) => { demoSec.https_redirect = !!a.redirect; return { ok: true }; },
       'netpanel.wizard_done': () => { demoSec.wizard_done = true; return { ok: true }; },
@@ -1900,6 +1928,7 @@
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
     getPortForwards, savePortForward, deletePortForward, setUpnp, getLan, setLan, confirmLan, revertLan,
     getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,
+    getTplink, setTplinkConfig, setTplinkBand, saveTplinkWifi,
     getAdguard, setupAdguard, enableAdguard, connectAdguard, setAdguardProtection, getAdguardServices, getAdguardGlobal, setAdguardGlobal,
     getAdguardClient, setAdguardClient, AG_POPULAR, getSpeedSchedule, setSpeedSchedule, getSecurity, setHttpsRedirect, finishWizard, getLog, getSysOpt, setSysOpt,
     getIntegrations, setIntegration, startScan, getScan, wakeOnLan, getUpdate, applyUpdate, getUpdateStatus, setAutoUpdate, TYPE_LABELS: TYPES,

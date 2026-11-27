@@ -34,7 +34,8 @@
 					"st_sched_get",
 					"sec_get",
 					"log_get",
-					"sysopt_get"
+					"sysopt_get",
+					"tp_status"
 				],
 				"system": [
 					"board",
@@ -133,7 +134,10 @@
 					"st_sched_set",
 					"sec_https",
 					"wizard_done",
-					"sysopt_set"
+					"sysopt_set",
+					"tp_config",
+					"tp_set",
+					"tp_wifi_set"
 				],
 				"system": [
 					"reboot"

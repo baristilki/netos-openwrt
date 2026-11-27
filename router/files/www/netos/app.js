@@ -779,13 +779,13 @@
   // Yeni bir cihaz/servis desteği eklemek: buraya bir kayıt + router'da /usr/libexec/netpanel/ altında bir betik
   const INTEGRATIONS = [
     { id: 'huawei', icon: 'wifi', name: 'Huawei WiFi AX2 / WS5200', cat: 'Wi-Fi erişim noktası', desc: 'Huawei cihazın Wi-Fi’sini aç/kapa; ağ adı, şifre, kanal ve kanal analizi. Bağlı cihazların bandı cihaz listesinde görünür.' },
-    { id: 'tplink', icon: 'router', name: 'TP-Link Archer BE230', cat: 'Wi-Fi erişim noktası', desc: 'Wi-Fi 7 router’ı erişim noktası olarak NetOS’tan yönetme.', soon: true },
+    { id: 'tplink', icon: 'router', name: 'TP-Link Archer BE230', cat: 'Wi-Fi erişim noktası · Deneysel', desc: 'Wi-Fi 7 router’ı erişim noktası olarak NetOS’tan yönetin: bantları aç/kapa, ağ adı ve şifre. Gerçek cihazda henüz doğrulanmadı.', beta: true },
     { id: 'adguard', icon: 'block', name: 'AdGuard Home', cat: 'Reklam ve site engelleme · Yönetim menüsünde', desc: 'Tüm ağda reklam ve izleyici engelleme; cihaz başına YouTube, TikTok gibi uygulama engeli ve güvenli arama.', page: '/adblock', setup: true },
     { id: 'vpn', icon: 'vpn', name: 'WireGuard VPN', cat: 'Uzaktan erişim · Yönetim menüsünde', desc: 'Dışarıdayken telefonunuzdan ev ağınıza güvenle bağlanın; cihaz eklemek için QR kod.', page: '/vpn' },
     { id: 'cloudflare', icon: 'cloud', name: 'Cloudflare Tunnel', cat: 'Uzaktan erişim', desc: 'Port açmadan panele ve ağdaki servislere dışarıdan güvenli erişim; e-posta ile giriş koruması.' },
     { id: 'scanner', icon: 'radar', name: 'Ağ tarayıcı', cat: 'Araç · Analiz menüsünde', desc: 'Ağdaki tüm IP adreslerini tarar; bilinmeyen cihazları, açık portları ve web arayüzlerini bulur. Açınca Analiz menüsüne eklenir.', page: '/scanner' },
   ];
-  const integOn = (id) => (id === 'huawei' ? !!(state.xInteg?.huawei || state.integLocal?.huawei) : !!state.xInteg?.[id]);
+  const integOn = (id) => (id === 'huawei' || id === 'tplink' ? !!(state.xInteg?.[id] || state.integLocal?.[id]) : !!state.xInteg?.[id]);
   function integrationsPage() {
     if (!state.xInteg && !state.xIntegError) loadX('xInteg', () => NP.getIntegrations(), '/integrations');
     let g = state.xInteg;
@@ -822,7 +822,7 @@
       x = INTEGRATIONS.find((i) => i.id === id),
       host = document.getElementById('drawer-host');
     if (!x || !host) return;
-    let body = id === 'huawei' ? huaweiConfigCard() : id === 'cloudflare' ? tunnelCard() : id === 'adguard' ? adguardSettings() : '';
+    let body = id === 'tplink' ? tplinkSettings() : id === 'huawei' ? huaweiConfigCard() : id === 'cloudflare' ? tunnelCard() : id === 'adguard' ? adguardSettings() : '';
     let prev = host.querySelector('.drawer-body')?.scrollTop ?? state.integDrawerScroll ?? 0;
     host.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open integ-drawer" role="dialog" aria-modal="true" aria-label="${esc(x.name)}"><div class="drawer-head"><div class="integ-top"><span class="integ-icon">${icon(x.icon)}</span><div><div class="eyebrow">Entegrasyon</div><h2>${esc(x.name)}</h2><p>${esc(x.cat)}</p></div></div><button class="icon-btn" type="button" aria-label="Kapat" data-close-drawer>${icon('x')}</button></div><div class="drawer-body">${body}</div></aside>`;
     let b = host.querySelector('.drawer-body');
@@ -834,6 +834,44 @@
     state.integDrawerScroll = 0;
     if (id === 'cloudflare' && !state.xTunnel && !state.xTunnelError) loadX('xTunnel', () => NP.getTunnel(), '/integrations');
     drawIntegDrawer();
+  }
+
+  /* ── TP-Link (deneysel) ── */
+  function loadTp(page) {
+    if (!state.xTp && !state.xTpError) loadX('xTp', () => NP.getTplink(), page);
+    return state.xTp;
+  }
+  function tplinkSettings() {
+    let t = loadTp('/integrations');
+    if (state.xTpError) return `<div class="form-error">${esc(state.xTpError)}</div>`;
+    if (!t) return '<div class="empty">Yükleniyor…</div>';
+    let st = !t.enabled ? '' : t.connected ? `<div class="sec-ok">✓ Bağlandı · ${t.bands.length} bant okundu</div>` : `<div class="form-error">${esc(t.error || 'Bağlanılamadı')}</div>`;
+    return `<div class="alert">Deneysel destek: Archer BE230 v2 (fw 1.3.x) için yazıldı, gerçek cihazda henüz denenmedi. Sorun olursa “Wi-Fi” sayfasındaki ayarlar çalışmayabilir; TP-Link’in kendi arayüzü her zaman kullanılabilir.</div>
+      <form id="tp-form" class="x-form"><div class="field-wrap"><label>TP-Link IP adresi</label><input class="field num" name="host" value="${esc(t.host)}" placeholder="ör. 192.168.1.3" inputmode="decimal"></div>
+      <div class="x-grid2"><div class="field-wrap"><label>Kullanıcı adı</label><input class="field" name="username" value="${esc(t.username)}"></div><div class="field-wrap"><label>Yönetici şifresi</label><input class="field" name="password" type="password" autocomplete="off" placeholder="${t.passwordSet ? 'Kayıtlı — değiştirmek için yazın' : ''}"></div></div>
+      <p class="field-hint">Şifre yalnız router’da saklanır, tarayıcıya geri gönderilmez. BE230’u erişim noktası (AP) modunda kullanın ve ${t.host ? '' : 'IP adresini '}Cihazlar’dan sabit IP verin.</p>
+      ${st}<div class="form-error" id="tp-error"></div><div class="x-form-foot">${t.host ? `<a class="link-btn" href="http://${esc(t.host)}/" target="_blank" rel="noopener">TP-Link arayüzü ↗</a>` : ''}<button class="btn primary" type="submit">Kaydet ve bağlan</button></div></form>`;
+  }
+  // Wi-Fi sayfasındaki TP-Link bölümü
+  function tplinkWifiSection() {
+    if (!integOn('tplink')) return '';
+    let t = loadTp('/wifi');
+    let rows = !t
+      ? '<div class="empty">Yükleniyor…</div>'
+      : !t.connected
+        ? `<div class="empty">${esc(t.error || 'Bağlı değil')} · <a href="#/integrations">Ayarlar</a></div>`
+        : `<div class="wifi-list">${t.bands.map((b) => `<div class="wifi-row hw-wifi-row"><span class="wifi-glyph ${b.enabled ? '' : 'off'}">${icon('wifi')}</span><div class="wifi-info"><div class="wifi-name">${esc(b.ssid)}</div><div class="wifi-sub">${esc(b.bandLabel)} · TP-Link</div></div><div class="wifi-right"><input class="switch" type="checkbox" data-tp-band="${esc(b.band)}"${b.enabled ? ' checked' : ''} aria-label="${esc(b.bandLabel)} aç/kapat"><button class="btn small" type="button" data-tp-edit="${esc(b.band)}">Düzenle</button></div></div>`).join('')}</div>`;
+    return `<section class="card wifi-detail">${cardHead('router', 'TP-Link Archer BE230', '<span class="badge">Deneysel</span>')}${rows}</section>`;
+  }
+  function tpWifiPanel(p) {
+    let b = state.xTp?.bands.find((x) => x.band === p.band) || { ssid: '', bandLabel: '' };
+    return {
+      icon: 'wifi', eyebrow: 'TP-Link Wi-Fi', title: b.ssid || 'Wi-Fi', sub: b.bandLabel,
+      body: `<form id="tp-wifi-form" class="x-form" data-band="${esc(p.band)}"><div class="field-wrap"><label>Ağ adı (SSID)</label><input class="field" name="ssid" maxlength="32" value="${esc(b.ssid)}"></div>
+        <div class="field-wrap"><label>Yeni şifre</label><input class="field" name="password" type="password" minlength="8" maxlength="63" autocomplete="off" placeholder="Boş bırakılırsa değişmez"></div>
+        <div class="alert">Kaydedince bu banttaki cihazlar birkaç saniye kopar; şifre değiştiyse yeni şifreyle bağlanmaları gerekir.</div>
+        <div class="form-error" id="tpw-error"></div><div class="x-form-foot"><button type="button" class="btn" data-close-drawer>İptal</button><button class="btn primary" type="submit">Kaydet</button></div></form>`,
+    };
   }
 
   /* ── Ağ tarayıcı (Analiz > Ağ tarayıcı) ── */
@@ -1042,7 +1080,7 @@
     let p = state.xPanel,
       host = document.getElementById('drawer-host');
     if (!p || !host) return;
-    let v = { pf: pfPanel, qr: qrPanel, peer: peerPanel }[p.kind]?.(p);
+    let v = { pf: pfPanel, qr: qrPanel, peer: peerPanel, tpwifi: tpWifiPanel }[p.kind]?.(p);
     if (!v) return;
     let prev = host.querySelector('.drawer-body')?.scrollTop || 0;
     host.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open x-panel" role="dialog" aria-modal="true" aria-label="${esc(v.title)}"><div class="drawer-head"><div class="integ-top"><span class="integ-icon">${icon(v.icon)}</span><div><div class="eyebrow">${esc(v.eyebrow)}</div><h2>${esc(v.title)}</h2>${v.sub ? `<p>${esc(v.sub)}</p>` : ''}</div></div><button class="icon-btn" type="button" aria-label="Kapat" data-close-drawer>${icon('x')}</button></div><div class="drawer-body">${v.body}</div></aside>`;
@@ -1879,6 +1917,7 @@
     }
     syncGlobalBand();
     if (state.page === '/speed') (c.querySelector('.grid') || c).insertAdjacentHTML('beforeend', speedSchedCard());
+    if (state.page === '/wifi') c.insertAdjacentHTML('beforeend', tplinkWifiSection());
     c.insertAdjacentHTML('afterbegin', lanPendingBanner() + pwBanner());
     if (state.page === '/logs') scrollLogEnd();
     if (state.xPanel) drawXPanel();
@@ -3228,6 +3267,20 @@
       on = t.checked,
       x = INTEGRATIONS.find((i) => i.id === id);
     try {
+      if (id === 'tplink') {
+        if (on) {
+          state.integLocal = { ...state.integLocal, tplink: true };
+          render();
+          return openIntegDrawer('tplink');
+        }
+        if (!confirm('TP-Link bağlantısı kapatılsın mı? Cihaz çalışmaya devam eder, yalnız NetOS’tan yönetilmez.')) return (t.checked = true);
+        await NP.setTplinkConfig({ enabled: false });
+        state.integLocal = { ...state.integLocal, tplink: false };
+        state.xTp = null;
+        state.xInteg = null;
+        toast('TP-Link bağlantısı kapatıldı');
+        return render();
+      }
       if (id === 'huawei') {
         // açınca önce ayar penceresi; bağlantı Kaydet ile etkinleşir (şifresiz deneme Huawei'yi kilitlemesin)
         if (on) {
@@ -3775,6 +3828,54 @@
       }
     } catch (x) {
       err(x.message);
+    }
+    done();
+  });
+  // ── TP-Link: olaylar ──
+  root.addEventListener('change', async (e) => {
+    let t = e.target;
+    if (!t.matches('[data-tp-band]')) return;
+    t.disabled = true;
+    try {
+      await NP.setTplinkBand(t.dataset.tpBand, t.checked);
+      toast(`TP-Link ${t.checked ? 'açıldı' : 'kapatıldı'}`);
+    } catch (x) {
+      t.checked = !t.checked;
+      toast(x.message);
+    }
+    state.xTp = null;
+    render();
+  });
+  root.addEventListener('click', (e) => {
+    let b = e.target.closest('[data-tp-edit]');
+    if (b) openXPanel({ kind: 'tpwifi', band: b.dataset.tpEdit });
+  });
+  root.addEventListener('submit', async (e) => {
+    let f = e.target;
+    if (f.id !== 'tp-form' && f.id !== 'tp-wifi-form') return;
+    e.preventDefault();
+    let btn = f.querySelector('[type=submit]'),
+      done = xBusy(btn, f.id === 'tp-form' ? 'Bağlanıyor…' : 'Kaydediliyor…'),
+      er = f.querySelector('.form-error');
+    er.textContent = '';
+    try {
+      if (f.id === 'tp-form') {
+        await NP.setTplinkConfig({ host: f.elements.host.value.trim(), username: f.elements.username.value, password: f.elements.password.value, enabled: true });
+        state.xTp = await NP.getTplink();
+        state.xInteg = null;
+        toast(state.xTp.connected ? 'TP-Link’e bağlanıldı' : 'Ayarlar kaydedildi; bağlantı kurulamadı');
+        render();
+        return;
+      }
+      await NP.saveTplinkWifi(f.dataset.band, { ssid: f.elements.ssid.value.trim(), password: f.elements.password.value });
+      state.xPanel = null;
+      state.xTp = null;
+      document.getElementById('drawer-host').replaceChildren();
+      toast('TP-Link Wi-Fi ayarları kaydedildi');
+      render();
+      return;
+    } catch (x) {
+      er.textContent = x.message;
     }
     done();
   });

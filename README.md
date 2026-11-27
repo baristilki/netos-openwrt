@@ -57,7 +57,7 @@ NetOS → Entegrasyon menüsünden ihtiyacınız olanı açın; kapalı olanlar 
 | WireGuard VPN | VPN sunucusu, cihaz başına QR kod | Hazır |
 | Cloudflare Tunnel | Port açmadan dışarıdan erişim, DNS + Access otomatik kurulum | Hazır |
 | Ağ tarayıcı | IP tarama (özel aralık), tahmini cihaz tipi, açık port, web arayüzü, Wake-on-LAN, CSV | Hazır |
-| TP-Link Archer BE230 | Wi-Fi erişim noktası kontrolü | Geliştiriliyor |
+| TP-Link Archer BE230 | Bant aç/kapa, ağ adı, şifre (şifreli Archer API) | Deneysel — gerçek cihazda doğrulanmadı |
 
 ### Huawei
 IP `192.168.1.2`, kullanıcı `admin`, Huawei şifresi → Kaydet.

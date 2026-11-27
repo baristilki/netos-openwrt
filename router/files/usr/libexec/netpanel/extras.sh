@@ -172,8 +172,8 @@ integ_on() { # ad -> 0|1 (ayar yoksa varsayılan: zaten kuruluysa açık başlar
 }
 jbool() { [ "$1" = 1 ] && echo true || echo false; }
 integ_get() {
-	printf '{"huawei":%s,"cloudflare":%s,"scanner":%s,"vpn":%s,"adguard":%s,"cloudflared":%s,"adguardhome":%s,"curl":%s}\n' \
-		"$(jbool "$(uci -q get netpanel.huawei.enabled)")" \
+	printf '{"huawei":%s,"tplink":%s,"cloudflare":%s,"scanner":%s,"vpn":%s,"adguard":%s,"cloudflared":%s,"adguardhome":%s,"curl":%s}\n' \
+		"$(jbool "$(uci -q get netpanel.huawei.enabled)")" "$(jbool "$(uci -q get netpanel.tplink.enabled)")" \
 		"$(jbool "$(integ_on cloudflare)")" "$(jbool "$(integ_on scanner)")" "$(jbool "$(integ_on vpn)")" "$(jbool "$(integ_on adguard)")" \
 		"$([ -x /usr/bin/cloudflared ] && echo true || echo false)" "$([ -x /usr/bin/AdGuardHome ] && echo true || echo false)" \
 		"$(command -v curl >/dev/null && echo true || echo false)"
@@ -193,6 +193,20 @@ integ_set() {
 	*) err "Bilinmeyen entegrasyon" ;;
 	esac
 	uci commit netpanel
+	echo '{"ok":true}'
+}
+
+# ── TP-Link bağlantı ayarları (şifre yalnız router'da, geri gönderilmez) ──
+tp_config() {
+	local input t v
+	input=$(cat); json_load "$input" 2>/dev/null || err "Geçersiz istek"
+	[ "$(uci -q get netpanel.tplink)" = tplink ] || uci set netpanel.tplink=tplink
+	if json_get_type t host; then json_get_var v host; np_valid_ip "$v" || err "Geçersiz TP-Link IP adresi"; uci set "netpanel.tplink.host=$v"; fi
+	if json_get_type t username; then json_get_var v username; case "$v" in '' | *[!A-Za-z0-9_.@-]*) v=admin ;; esac; uci set "netpanel.tplink.username=$v"; fi
+	if json_get_type t password; then json_get_var v password; [ -n "$v" ] && uci set "netpanel.tplink.password=$v"; fi
+	if json_get_type t enabled; then json_get_var v enabled; uci set "netpanel.tplink.enabled=$([ "$v" = 1 ] && echo 1 || echo 0)"; fi
+	uci commit netpanel
+	rm -f /tmp/netpanel-tp/session
 	echo '{"ok":true}'
 }
 
@@ -217,6 +231,6 @@ st_sched_set() {
 }
 
 case "$1" in
-usage_get | ping_get | newdev_list | newdev_ack | notify_get | notify_set | notify_test | tz_get | tz_set | backup_create | backup_restore | integ_get | integ_set | st_sched_get | st_sched_set) "$1" ;;
+usage_get | ping_get | newdev_list | newdev_ack | notify_get | notify_set | notify_test | tz_get | tz_set | backup_create | backup_restore | integ_get | integ_set | st_sched_get | st_sched_set | tp_config) "$1" ;;
 *) echo "kullanım: $0 <komut>" >&2; exit 1 ;;
 esac
