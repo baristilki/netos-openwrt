@@ -406,9 +406,9 @@ function qr() {
 }
 
 // ══ Paket kurulumu (yalnız izinli listeler) ══
-const PKGS = { upnp: ['miniupnpd-nftables'], wireguard: ['wireguard-tools', 'kmod-wireguard'], qr: ['qrencode'], wol: ['etherwake'] };
+const PKGS = { adguard: ['adguardhome'], upnp: ['miniupnpd-nftables'], wireguard: ['wireguard-tools', 'kmod-wireguard'], qr: ['qrencode'], wol: ['etherwake'] };
 function pkgCheck(set) {
-	return { upnp: () => has('/usr/sbin/miniupnpd'), wireguard: wgInstalled, qr: () => has('/usr/bin/qrencode'), wol: () => has('/usr/sbin/etherwake') || has('/usr/bin/etherwake') }[set]();
+	return { adguard: () => has('/usr/bin/AdGuardHome'), upnp: () => has('/usr/sbin/miniupnpd'), wireguard: wgInstalled, qr: () => has('/usr/bin/qrencode'), wol: () => has('/usr/sbin/etherwake') || has('/usr/bin/etherwake') }[set]();
 }
 function pkg_install() {
 	const a = input(), set = a.set;

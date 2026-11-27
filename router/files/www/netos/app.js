@@ -80,6 +80,7 @@
       trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
       vpn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><circle cx="12" cy="11" r="2"/><path d="M12 13v3"/></svg>',
       qr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 14h2M14 18h2M18 18h2v2"/></svg>',
+      block: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/></svg>',
       plug: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7V3M15 7V3M6 7h12v4a6 6 0 0 1-12 0zM12 17v4"/></svg>',
       logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg>',
       radar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
@@ -93,7 +94,7 @@
   const navGroups = [
     ['Ağ', [['/', 'home', 'Ana sayfa', 1], ['/internet', 'globe', 'İnternet', 1], ['/devices', 'devices', 'Cihazlar', 1], ['/wifi', 'wifi', 'Wi-Fi', 1], ['/lan', 'router', 'Yerel ağ'], ['/ports', 'shield', 'Port yönlendirme']]],
     ['Analiz', [['/speed', 'speed', 'Hız & Ping'], ['/stats', 'chart', 'İstatistik'], ['/scanner', 'radar', 'Ağ tarayıcı', 0, 'scanner']]],
-    ['Yönetim', [['/vpn', 'vpn', 'VPN'], ['/integrations', 'plug', 'Entegrasyon'], ['/system', 'system', 'Sistem']]],
+    ['Yönetim', [['/adblock', 'block', 'Reklam engelleme', 0, 'adguard'], ['/vpn', 'vpn', 'VPN', 0, 'vpn'], ['/integrations', 'plug', 'Entegrasyon'], ['/system', 'system', 'Sistem']]],
   ];
   const navItems = navGroups.flatMap((g) => g[1]);
   // 5. alan: yalnız o entegrasyon açıkken görünür
@@ -774,6 +775,8 @@
   const INTEGRATIONS = [
     { id: 'huawei', icon: 'wifi', name: 'Huawei WiFi AX2 / WS5200', cat: 'Wi-Fi erişim noktası', desc: 'Huawei cihazın Wi-Fi’sini aç/kapa; ağ adı, şifre, kanal ve kanal analizi. Bağlı cihazların bandı cihaz listesinde görünür.' },
     { id: 'tplink', icon: 'router', name: 'TP-Link Archer BE230', cat: 'Wi-Fi erişim noktası', desc: 'Wi-Fi 7 router’ı erişim noktası olarak NetOS’tan yönetme.', soon: true },
+    { id: 'adguard', icon: 'block', name: 'AdGuard Home', cat: 'Reklam ve site engelleme · Yönetim menüsünde', desc: 'Tüm ağda reklam ve izleyici engelleme; cihaz başına YouTube, TikTok gibi uygulama engeli ve güvenli arama.', page: '/adblock', setup: true },
+    { id: 'vpn', icon: 'vpn', name: 'WireGuard VPN', cat: 'Uzaktan erişim · Yönetim menüsünde', desc: 'Dışarıdayken telefonunuzdan ev ağınıza güvenle bağlanın; cihaz eklemek için QR kod.', page: '/vpn' },
     { id: 'cloudflare', icon: 'cloud', name: 'Cloudflare Tunnel', cat: 'Uzaktan erişim', desc: 'Port açmadan panele ve ağdaki servislere dışarıdan güvenli erişim; e-posta ile giriş koruması.' },
     { id: 'scanner', icon: 'radar', name: 'Ağ tarayıcı', cat: 'Araç · Analiz menüsünde', desc: 'Ağdaki tüm IP adreslerini tarar; bilinmeyen cihazları, açık portları ve web arayüzlerini bulur. Açınca Analiz menüsüne eklenir.', page: '/scanner' },
   ];
@@ -800,7 +803,7 @@
               : on
                 ? '<span class="badge ok">Açık</span>'
                 : '<span class="badge">Kapalı</span>';
-      let open = !on || x.soon ? '' : x.page ? `<a class="link-btn" href="#${x.page}">Aç →</a>` : `<button class="link-btn" type="button" data-integ-open="${x.id}">Ayarlar</button>`;
+      let open = !on || x.soon ? '' : (x.setup || !x.page ? `<button class="link-btn" type="button" data-integ-open="${x.id}">Ayarlar</button>` : '') + (x.page ? `<a class="link-btn" href="#${x.page}">Aç →</a>` : '');
       let ctl = x.soon
         ? '<span class="integ-soon">Geliştiriliyor</span>'
         : `<input class="switch" type="checkbox" data-integ="${x.id}" aria-label="${esc(x.name)}"${on ? ' checked' : ''}${g ? '' : ' disabled'}>`;
@@ -814,7 +817,7 @@
       x = INTEGRATIONS.find((i) => i.id === id),
       host = document.getElementById('drawer-host');
     if (!x || !host) return;
-    let body = id === 'huawei' ? huaweiConfigCard() : id === 'cloudflare' ? tunnelCard() : '';
+    let body = id === 'huawei' ? huaweiConfigCard() : id === 'cloudflare' ? tunnelCard() : id === 'adguard' ? adguardSettings() : '';
     let prev = host.querySelector('.drawer-body')?.scrollTop ?? state.integDrawerScroll ?? 0;
     host.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open integ-drawer" role="dialog" aria-modal="true" aria-label="${esc(x.name)}"><div class="drawer-head"><div class="integ-top"><span class="integ-icon">${icon(x.icon)}</span><div><div class="eyebrow">Entegrasyon</div><h2>${esc(x.name)}</h2><p>${esc(x.cat)}</p></div></div><button class="icon-btn" type="button" aria-label="Kapat" data-close-drawer>${icon('x')}</button></div><div class="drawer-body">${body}</div></aside>`;
     let b = host.querySelector('.drawer-body');
@@ -1239,6 +1242,144 @@
     return { icon: 'qr', eyebrow: 'Wi-Fi paylaş', title: p.ssid || 'Wi-Fi', sub: p.bandLabel || '', body };
   }
 
+  /* ═══ AdGuard Home (reklam / site engelleme) ═════════════════════════════ */
+  const agWeb = (a) => `http://${a?.lanIp || location.hostname}:${a?.webPort || 3000}/`;
+  function loadAg(page) {
+    if (!state.xAg && !state.xAgError) loadX('xAg', () => NP.getAdguard(), page);
+    return state.xAg;
+  }
+  // Entegrasyon ayar penceresi içeriği
+  function adguardSettings() {
+    let a = loadAg('/integrations');
+    if (state.xAgError) return `<div class="form-error">${esc(state.xAgError)}</div>`;
+    if (!a) return '<div class="empty">Yükleniyor…</div>';
+    if (!a.installed) return pkgGate('adguard', 'AdGuard Home', '~10 MB');
+    if (!a.configured)
+      return `<div class="ag-intro"><p>AdGuard Home tüm ağda reklamları, izleyicileri ve zararlı siteleri DNS düzeyinde engeller; cihaz başına YouTube, TikTok gibi uygulamaları kapatmanızı sağlar.</p>
+        <ol class="x-steps"><li>AdGuard DNS’i devralır (port 53); dnsmasq DHCP ve yerel adlar için port 54’e geçer.</li><li>Üst DNS olarak şifreli Cloudflare + Quad9 (DoH) kullanılır.</li><li>Kurulumdan sonra DNS test edilir; sorun olursa otomatik eski düzene dönülür.</li></ol></div>
+        <form id="ag-setup" class="x-form"><div class="field-wrap"><label>AdGuard yönetici şifresi (kullanıcı: admin)</label><input class="field" name="password" type="password" minlength="8" maxlength="64" autocomplete="new-password" required></div>
+        <div class="field-wrap"><label>Şifre (tekrar)</label><input class="field" name="password2" type="password" minlength="8" maxlength="64" autocomplete="new-password" required></div>
+        <p class="field-hint">Bu şifreyle AdGuard’ın kendi arayüzüne de girebilirsiniz: ${esc(agWeb(a))}</p>
+        <div class="form-error" id="ag-error"></div><div class="x-form-foot"><button class="btn primary" type="submit">Kur ve etkinleştir</button></div></form>`;
+    let needAuth = !a.creds || a.stats?.auth;
+    let connect = `<form id="ag-connect" class="x-form"><div class="x-grid2"><div class="field-wrap"><label>Kullanıcı adı</label><input class="field" name="user" value="admin" autocomplete="username"></div><div class="field-wrap"><label>Şifre</label><input class="field" name="password" type="password" autocomplete="current-password" required></div></div><div class="form-error" id="ag-error"></div><div class="x-form-foot"><button class="btn ${needAuth ? 'primary' : ''}" type="submit">Bağlan</button></div></form>`;
+    if (needAuth) return `<p>AdGuard Home bu router’da zaten kurulu. NetOS’un yönetebilmesi için AdGuard kullanıcı adı ve şifresini girin.</p>${connect}`;
+    return `<div class="info-grid"><div><small>Durum</small><strong>${a.active ? 'Ağın DNS’i AdGuard’da' : 'Kapalı (DNS: dnsmasq)'}</strong></div><div><small>Sürüm</small><strong>${esc(a.stats?.version || '—')}</strong></div></div>
+      ${a.active ? '' : '<div class="x-form-foot"><button class="btn primary" type="button" data-ag-enable>DNS’i AdGuard’a ver</button></div>'}
+      <p><a href="${esc(agWeb(a))}" target="_blank" rel="noopener">AdGuard arayüzünü aç ↗</a> · <a href="#/adblock">NetOS’ta istatistikler →</a></p>
+      <details class="upd-notes"><summary>Kayıtlı şifreyi güncelle</summary>${connect}</details>`;
+  }
+  // Yönetim > Reklam engelleme
+  function adblockPage() {
+    let head = pageHead('Güvenlik', 'Reklam engelleme', 'AdGuard Home ile tüm ağda reklam, izleyici ve istenmeyen uygulamaları engelleyin.', state.xAg ? `<a class="btn" href="${esc(agWeb(state.xAg))}" target="_blank" rel="noopener">AdGuard ↗</a>` : '');
+    if (state.xInteg && !integOn('adguard')) return `${head}<section class="card"><div class="empty">AdGuard entegrasyonu kapalı. <a href="#/integrations">Entegrasyonlar</a>’dan etkinleştirin.</div></section>`;
+    let a = loadAg('/adblock');
+    if (state.xAgError) return `${head}<div class="form-error">${esc(state.xAgError)}</div>`;
+    if (!a) return `${head}<div class="empty">Yükleniyor…</div>`;
+    if (!a.configured || !a.creds || !a.active || a.stats?.auth)
+      return `${head}<section class="card"><div class="empty">AdGuard henüz hazır değil. <a href="#/integrations">Entegrasyonlar > AdGuard Home > Ayarlar</a>’dan kurulumu tamamlayın.</div></section>`;
+    let s = a.stats || {};
+    if (s.error) return `${head}<div class="form-error">${esc(s.error)}</div>`;
+    let pct = s.queries ? Math.round((s.blocked / s.queries) * 1000) / 10 : 0;
+    let paused = !s.protection;
+    let tiles = `<div class="x-tiles"><div class="x-tile"><small>DNS sorgusu (24 saat)</small><b>${s.queries.toLocaleString('tr-TR')}</b></div><div class="x-tile"><small>Engellenen</small><b>${s.blocked.toLocaleString('tr-TR')}</b><span>%${pct}</span></div><div class="x-tile"><small>Ortalama yanıt</small><b>${s.avgMs == null ? '—' : Math.round(s.avgMs) + ' ms'}</b></div></div>`;
+    let top = s.topBlocked.length
+      ? `<div class="x-ranks">${s.topBlocked.map((d) => `<div class="x-rank ag-rank"><span class="x-rank-name">${esc(d.name)}</span><i class="x-track"><em class="dl" style="width:${(d.count / s.topBlocked[0].count) * 100}%"></em></i><b>${d.count.toLocaleString('tr-TR')}</b></div>`).join('')}</div>`
+      : '<p class="field-hint">Henüz engellenen alan adı yok.</p>';
+    return `${head}<div class="grid">
+      <section class="card span-12">${cardHead('block', 'Koruma')}
+        <div class="toggle-line"><div><strong>${paused ? 'Koruma durduruldu' : 'Koruma açık'}</strong><p>${paused ? 'Reklamlar ve engellenen servisler şu an geçiyor.' : 'Reklamlar, izleyiciler ve seçili servisler engelleniyor.'}</p></div><input class="switch" type="checkbox" data-ag-protect${paused ? '' : ' checked'}></div>
+        ${paused ? '' : '<div class="chip-row"><span class="field-hint">Geçici durdur:</span><button class="chip" type="button" data-ag-pause="10">10 dakika</button><button class="chip" type="button" data-ag-pause="60">1 saat</button></div>'}
+        ${tiles}</section>
+      <section class="card span-6">${cardHead('chart', 'En çok engellenenler')}${top}</section>
+      <section class="card span-6" id="ag-global">${cardHead('devices', 'Tüm ağda engellenen uygulamalar')}${agServicesPicker('global', state.agGlobal)}</section>
+    </div>`;
+  }
+  // Servis seçici (YouTube, TikTok…); scope: 'global' | mac
+  function agServicesPicker(scope, selected) {
+    if (!state.agServices) {
+      if (!state.agServicesLoading) {
+        state.agServicesLoading = true;
+        Promise.all([NP.getAdguardServices(), scope === 'global' ? NP.getAdguardGlobal() : null])
+          .then(([sv, g]) => {
+            state.agServices = sv;
+            if (g) state.agGlobal = g;
+            scope === 'global' ? render() : redrawAgClient();
+          })
+          .catch((e) => toast(e.message))
+          .finally(() => (state.agServicesLoading = false));
+      }
+      return '<div class="empty">Yükleniyor…</div>';
+    }
+    if (scope === 'global' && !state.agGlobal) {
+      NP.getAdguardGlobal().then((g) => ((state.agGlobal = g), render())).catch((e) => toast(e.message));
+      return '<div class="empty">Yükleniyor…</div>';
+    }
+    let sel = new Set(selected || []);
+    let pop = NP.AG_POPULAR.map((id) => state.agServices.find((s) => s.id === id)).filter(Boolean);
+    let extra = (selected || []).filter((id) => !NP.AG_POPULAR.includes(id)).map((id) => state.agServices.find((s) => s.id === id) || { id, name: id });
+    let chips = [...pop, ...extra].map((s) => `<button type="button" class="chip svc${sel.has(s.id) ? ' active' : ''}" data-ag-svc="${esc(s.id)}" aria-pressed="${sel.has(s.id)}">${esc(s.name)}</button>`).join('');
+    let more = state.agServices.filter((s) => !NP.AG_POPULAR.includes(s.id) && !sel.has(s.id));
+    return `<div class="ag-svcs" data-ag-scope="${esc(scope)}"><div class="chip-row">${chips}</div>
+      <details class="ag-more"><summary>Diğer ${more.length} servis</summary><div class="chip-row">${more.map((s) => `<button type="button" class="chip svc" data-ag-svc="${esc(s.id)}">${esc(s.name)}</button>`).join('')}</div></details>
+      <div class="x-form-foot"><span class="field-hint">Seçilenler engellenir.</span><button class="btn small primary" type="button" data-ag-save="${esc(scope)}">Kaydet</button></div></div>`;
+  }
+
+  /* ── Cihaz paneli ekleri: geldi/gitti bildirimi + içerik filtresi ── */
+  function injectDeviceExtras(c) {
+    let body = document.querySelector('#drawer-host .drawer-body');
+    if (!body) return;
+    let sec = document.createElement('div');
+    sec.className = 'drawer-section x-devx';
+    sec.innerHTML = `<div class="toggle-line"><div><strong>${icon('bell')} Eve gelince / ayrılınca bildir</strong><p>Bu cihaz ağa bağlanınca ya da 10 dakika görünmeyince Telegram’dan mesaj gelir${state.xNotify && !state.xNotify.enabled ? ' (Telegram bildirimleri şu an kapalı: Sistem > Bildirimler)' : ''}.</p></div><input class="switch" type="checkbox" data-presence="${esc(c.mac)}"${c.presence ? ' checked' : ''}></div>`;
+    body.appendChild(sec);
+    if (integOn('adguard') && state.xAg?.active) {
+      let f = document.createElement('div');
+      f.className = 'drawer-section x-agc';
+      f.id = 'agc-' + c.mac.replace(/:/g, '');
+      body.appendChild(f);
+      state.agClientMac = c.mac;
+      if (!state.agClient?.[c.mac]) {
+        f.innerHTML = '<div class="field-hint">İçerik filtresi yükleniyor…</div>';
+        NP.getAdguardClient(c.mac, c.ip)
+          .then((r) => {
+            state.agClient = { ...state.agClient, [c.mac]: r };
+            redrawAgClient();
+          })
+          .catch((e) => (f.innerHTML = `<div class="form-error">${esc(e.message)}</div>`));
+      } else redrawAgClient();
+    }
+  }
+  function redrawAgClient() {
+    let mac = state.agClientMac,
+      f = mac && document.getElementById('agc-' + mac.replace(/:/g, '')),
+      r = state.agClient?.[mac],
+      c = state.clients.find((x) => x.mac === mac);
+    if (!f || !r || !c) return;
+    let draft = (state.agDraft = state.agDraft?.mac === mac ? state.agDraft : { mac, ...r, services: [...(r.services || [])] });
+    f.innerHTML = `<div class="x-sched-head"><strong>${icon('block')} İçerik filtresi (AdGuard)</strong>${r.custom ? '<span class="badge warn">Özel kural</span>' : ''}</div>
+      ${c.static ? '' : '<p class="field-hint warn-text">AdGuard cihazı IP adresinden tanır; filtrenin kalıcı olması için bu cihaza sabit IP verin.</p>'}
+      <div class="toggle-line"><div><strong>Reklam ve izleyici engelle</strong></div><input class="switch" type="checkbox" data-agc="filtering"${draft.filtering ? ' checked' : ''}></div>
+      <div class="toggle-line"><div><strong>Yetişkin içerik engelle</strong></div><input class="switch" type="checkbox" data-agc="parental"${draft.parental ? ' checked' : ''}></div>
+      <div class="toggle-line"><div><strong>Güvenli arama zorunlu</strong><p>Google, YouTube, Bing’de kısıtlı mod.</p></div><input class="switch" type="checkbox" data-agc="safesearch"${draft.safesearch ? ' checked' : ''}></div>
+      <h3 class="x-sub">Engellenen uygulamalar</h3>${agServicesPicker(mac, draft.services)}`;
+  }
+  const svcScopeSel = (scope) => (scope === 'global' ? (state.agGlobal = state.agGlobal || []) : state.agDraft.services);
+
+  /* ── Hız testi zamanlama kartı (Hız & Ping sayfası) ── */
+  function speedSchedCard() {
+    if (!state.xStSched && !state.xStSchedError) loadX('xStSched', () => NP.getSpeedSchedule(), '/speed');
+    let s = state.xStSched;
+    let body = !s
+      ? '<div class="empty">Yükleniyor…</div>'
+      : `<form id="st-sched" class="x-form"><div class="toggle-line"><div><strong>Her gün otomatik test</strong><p>Sonuçlar “Son testler” listesine eklenir; operatörünüze kanıt olur.</p></div><input class="switch" type="checkbox" name="enabled"${s.enabled ? ' checked' : ''}></div>
+        <div class="x-grid2"><div class="field-wrap"><label>Saat</label><select class="field" name="hour">${Array.from({ length: 24 }, (_, h) => `<option value="${h}"${+s.hour === h ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></div>
+        <div class="field-wrap"><label>Hat</label><select class="field" name="wan"><option value="">Varsayılan hat</option><option value="all"${s.wan === 'all' ? ' selected' : ''}>Tüm hatlar</option>${wanList().map((w) => `<option value="${esc(w.name)}"${s.wan === w.name ? ' selected' : ''}>${esc(w.label || w.name)}</option>`).join('')}</select></div></div>
+        <p class="field-hint">Gece saatleri (ör. 04:00) önerilir; test sırasında internet kısa süre yavaşlar.</p>
+        <div class="x-form-foot"><button class="btn small primary" type="submit">Kaydet</button></div></form>`;
+    return `<section class="card span-12">${cardHead('clock', 'Zamanlanmış hız testi')}${body}</section>`;
+  }
+
   function wanList() {
     return state.wanConfig?.wans || [];
   }
@@ -1599,7 +1740,8 @@
     else if (state.page === '/scanner') c.innerHTML = scannerPage();
     else if (state.page === '/lan') c.innerHTML = lanPage();
     else if (state.page === '/ports') c.innerHTML = portsPage();
-    else if (state.page === '/vpn') c.innerHTML = vpnPage();
+    else if (state.page === '/vpn') c.innerHTML = state.xInteg && !integOn('vpn') ? `${pageHead('Uzaktan erişim', 'VPN (WireGuard)', '')}<section class="card"><div class="empty">VPN entegrasyonu kapalı. <a href="#/integrations">Entegrasyonlar</a>’dan etkinleştirin.</div></section>` : vpnPage();
+    else if (state.page === '/adblock') c.innerHTML = adblockPage();
     else {
       state.page = '/';
       c.innerHTML = state.overview ? home() : '';
@@ -1615,6 +1757,7 @@
       c.querySelector('.page-head')?.insertAdjacentHTML('afterend', newDevicesCard());
     }
     syncGlobalBand();
+    if (state.page === '/speed') (c.querySelector('.grid') || c).insertAdjacentHTML('beforeend', speedSchedCard());
     c.insertAdjacentHTML('afterbegin', lanPendingBanner());
     if (state.xPanel) drawXPanel();
     if (state.page === '/integrations' && state.integDrawer) drawIntegDrawer();
@@ -1686,6 +1829,9 @@
     prioritySection.innerHTML = `<div class="toggle-line"><div><strong>Oyun &#246;nceli&#287;i</strong><p>Y&#252;kleme trafi&#287;ine &#246;ncelik verir.</p></div><input class="switch" type="checkbox" name="priority" ${c.priority ? 'checked' : ''}></div>`;
     clientForm.insertBefore(prioritySection, speedSection);
     document.getElementById('drawer-host').replaceChildren(...backdrop.children);
+    state.agDraft = state.agDraft?.mac === c.mac ? state.agDraft : null;
+    if (integOn('adguard') && !state.xAg) loadAg('/devices');
+    injectDeviceExtras(c);
     injectSchedule(c);
   }
   function openWifi(section) {
@@ -2976,7 +3122,25 @@
           if (confirm('Tünel şu an açık. Tünel de durdurulsun mu?\n\nTamam: tünel durur, dışarıdan erişim kesilir.\nİptal: tünel çalışmaya devam eder, yalnız bu bölüm gizlenir.')) await NP.setTunnelEnabled(false);
           state.xTunnel = null;
         }
+        if (id === 'adguard' && !on) {
+          if (!confirm('AdGuard kapatılsın mı? Ağın DNS’i dnsmasq’a döner, reklam ve uygulama engelleme durur.')) return (t.checked = true);
+          let ag = await NP.getAdguard().catch(() => null);
+          if (ag?.active) await NP.enableAdguard(false);
+        }
+        if (id === 'vpn' && !on && state.xVpn?.configured && state.xVpn.enabled) {
+          if (confirm('VPN sunucusu da kapatılsın mı?\n\nTamam: kimse bağlanamaz.\nİptal: VPN çalışmaya devam eder, yalnız menüden gizlenir.')) await NP.setVpn({ enabled: false });
+          state.xVpn = null;
+        }
         await NP.setIntegration(id, on);
+        if (id === 'adguard' && on) {
+          let ag = await NP.getAdguard().catch(() => null);
+          state.xAg = ag;
+          state.xInteg = await NP.getIntegrations().catch(() => null);
+          render();
+          if (ag?.configured && ag.creds && !ag.stats?.auth && !ag.active) await NP.enableAdguard(true).then(() => toast('Ağın DNS’i artık AdGuard’da'), (x) => toast(x.message));
+          state.xAg = null;
+          return openIntegDrawer('adguard');
+        }
       }
       state.xInteg = null;
       toast(`${x.name} ${on ? 'etkinleştirildi' : 'kapatıldı'}`);
@@ -2986,6 +3150,7 @@
       }
       render();
       if (on && id === 'cloudflare') openIntegDrawer('cloudflare');
+      if (on && id === 'vpn') location.hash = '#/vpn';
     } catch (err) {
       t.checked = !on;
       toast(err.message);
@@ -3364,6 +3529,133 @@
     }
     if (el) el.textContent = Math.max(0, Math.round((p.until - Date.now()) / 1000));
   }, 1000);
+  // ── AdGuard, geldi/gitti, zamanlanmış test: olaylar ──
+  root.addEventListener('click', async (e) => {
+    let b = e.target.closest('[data-ag-svc],[data-ag-save],[data-ag-pause],[data-ag-enable]');
+    if (!b) return;
+    let d = b.dataset;
+    if (d.agSvc) {
+      let scope = b.closest('[data-ag-scope]').dataset.agScope,
+        list = svcScopeSel(scope),
+        i = list.indexOf(d.agSvc);
+      if (i >= 0) list.splice(i, 1);
+      else list.push(d.agSvc);
+      b.classList.toggle('active', i < 0);
+      b.setAttribute('aria-pressed', i < 0);
+      return;
+    }
+    if (d.agSave) {
+      let done = xBusy(b, 'Kaydediliyor…');
+      try {
+        if (d.agSave === 'global') {
+          await NP.setAdguardGlobal(state.agGlobal || []);
+          toast('Tüm ağ için engellenen uygulamalar kaydedildi');
+        } else {
+          let c = state.clients.find((x) => x.mac === d.agSave),
+            dr = state.agDraft;
+          let r = await NP.setAdguardClient(c.mac, c.ip, c.displayName, dr);
+          state.agClient = { ...state.agClient, [c.mac]: { ...dr, custom: r.custom } };
+          state.agDraft = null;
+          toast(r.custom ? 'İçerik filtresi kaydedildi' : 'Cihaz ağın genel ayarlarına döndü');
+          redrawAgClient();
+        }
+      } catch (x) {
+        toast(x.message);
+      }
+      return done();
+    }
+    if (d.agPause) {
+      try {
+        await NP.setAdguardProtection(false, +d.agPause);
+        toast(`Koruma ${d.agPause === '60' ? '1 saat' : d.agPause + ' dakika'} durduruldu`);
+      } catch (x) {
+        toast(x.message);
+      }
+      state.xAg = null;
+      return render();
+    }
+    if (b.matches('[data-ag-enable]')) {
+      let done = xBusy(b, 'Açılıyor…');
+      try {
+        await NP.enableAdguard(true);
+        await NP.setIntegration('adguard', true);
+        toast('Ağın DNS’i artık AdGuard’da');
+      } catch (x) {
+        toast(x.message);
+      }
+      done();
+      state.xAg = state.xInteg = null;
+      return render();
+    }
+  });
+  root.addEventListener('change', async (e) => {
+    let t = e.target;
+    if (t.matches('[data-agc]')) {
+      if (state.agDraft) state.agDraft[t.dataset.agc] = t.checked;
+      return;
+    }
+    if (t.matches('[data-presence]')) {
+      try {
+        await NP.setClient(t.dataset.presence, { presence: t.checked });
+        let c = state.clients.find((x) => x.mac === t.dataset.presence);
+        if (c) c.presence = t.checked;
+        toast(t.checked ? 'Geldi/gitti bildirimi açıldı' : 'Geldi/gitti bildirimi kapatıldı');
+      } catch (x) {
+        t.checked = !t.checked;
+        toast(x.message);
+      }
+      return;
+    }
+    if (t.matches('[data-ag-protect]')) {
+      try {
+        await NP.setAdguardProtection(t.checked);
+        toast(t.checked ? 'Koruma açıldı' : 'Koruma kapatıldı');
+      } catch (x) {
+        t.checked = !t.checked;
+        toast(x.message);
+      }
+      state.xAg = null;
+      return render();
+    }
+  });
+  root.addEventListener('submit', async (e) => {
+    let f = e.target;
+    if (!['ag-setup', 'ag-connect', 'st-sched'].includes(f.id)) return;
+    e.preventDefault();
+    let btn = f.querySelector('[type=submit]'),
+      err = (m) => {
+        let x = f.querySelector('.form-error');
+        if (x) x.textContent = m || '';
+        else if (m) toast(m);
+      };
+    err('');
+    let done = xBusy(btn, f.id === 'ag-setup' ? 'Kuruluyor… (1 dk sürebilir)' : 'Kaydediliyor…');
+    try {
+      if (f.id === 'ag-setup') {
+        if (f.elements.password.value !== f.elements.password2.value) throw new Error('Şifreler aynı değil');
+        await NP.setupAdguard(f.elements.password.value);
+        await NP.setIntegration('adguard', true);
+        toast('AdGuard Home kuruldu, ağın DNS’i artık AdGuard’da');
+        state.xAg = state.xInteg = null;
+        return render();
+      }
+      if (f.id === 'ag-connect') {
+        await NP.connectAdguard(f.elements.user.value.trim(), f.elements.password.value);
+        toast('AdGuard’a bağlanıldı');
+        state.xAg = null;
+        return render();
+      }
+      if (f.id === 'st-sched') {
+        await NP.setSpeedSchedule({ enabled: f.elements.enabled.checked, hour: f.elements.hour.value, wan: f.elements.wan.value });
+        toast(f.elements.enabled.checked ? `Her gün ${String(f.elements.hour.value).padStart(2, '0')}:00’da hız testi yapılacak` : 'Zamanlanmış test kapatıldı');
+        state.xStSched = null;
+        return done();
+      }
+    } catch (x) {
+      err(x.message);
+    }
+    done();
+  });
   // Sistem sayfası birkaç saniyede bir yenilenir; kullanıcı bir alana yazıyorsa yazdığını silme
   function formBusy() {
     let a = document.activeElement,

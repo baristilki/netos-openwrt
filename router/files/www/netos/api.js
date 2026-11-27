@@ -418,6 +418,7 @@
         connLabel: c.conn === 'wifi' ? ('Wi-Fi' + (c.band ? ' ' + fmt.band(c.band) : '')) : 'Ethernet',
         web: c.web || [],                  // açılabilir web arayüzleri (url listesi)
         priority: !!c.priority,            // oyun önceliği (giden trafik EF/Voice)
+        presence: !!c.presence,            // eve geldi / ayrıldı bildirimi
         schedule: (c.schedule || []).map(parseSchedule).filter(Boolean), // [{ days:[1..7], from, to }]
         schedBlocked: !!c.sched_blocked,   // şu an saat planı yüzünden internetsiz
         staticPending: !!c.static && !!c.ip && !!c.static_ip && c.ip !== c.static_ip,
@@ -465,6 +466,7 @@
     }
     if (patch.blocked != null) a.blocked = !!patch.blocked;
     if (patch.priority != null) a.priority = !!patch.priority;
+    if (patch.presence != null) a.presence = !!patch.presence;
     if (patch.schedule != null) {
       if (patch.schedule.length > 8) throw new ApiError('En fazla 8 plan eklenebilir', 'validate');
       a.schedule = patch.schedule.map((r) => {
@@ -1020,9 +1022,44 @@
   // -> { huawei, cloudflare, scanner, cloudflared (paket kurulu mu), curl }
   async function getIntegrations() {
     const r = await npCall('integ_get', {});
-    return { huawei: !!r.huawei, cloudflare: !!r.cloudflare, scanner: !!r.scanner, cloudflared: !!r.cloudflared, curl: !!r.curl };
+    return { huawei: !!r.huawei, cloudflare: !!r.cloudflare, scanner: !!r.scanner, vpn: !!r.vpn, adguard: !!r.adguard,
+      cloudflared: !!r.cloudflared, adguardhome: !!r.adguardhome, curl: !!r.curl };
   }
   async function setIntegration(id, enabled) { await npCall('integ_set', { id, enabled: !!enabled }); }
+
+  /* ── AdGuard Home ──────────────────────────────────────────────────────── */
+  // -> { installed, configured, running, active (DNS'i AdGuard veriyor), creds, webPort, lanIp,
+  //      stats: { protection, version, disabledUntil, queries, blocked, avgMs, topBlocked:[{name,count}], topClients, error, auth } }
+  async function getAdguard() {
+    const r = await npCall('ag_status', {});
+    const st = r.stats;
+    return { installed: !!r.installed, configured: !!r.configured, running: !!r.running, active: !!r.active, creds: !!r.creds,
+      webPort: r.web_port || 3000, lanIp: r.lan_ip || '',
+      stats: st ? { protection: !!st.protection, version: st.version || '', disabledUntil: st.disabled_until || null, queries: st.queries || 0, blocked: st.blocked || 0,
+        avgMs: st.avg_ms, topBlocked: st.top_blocked || [], topClients: st.top_clients || [], error: st.error || '', auth: !!st.auth } : null };
+  }
+  async function setupAdguard(password) { return npCall('ag_setup', { password }); }
+  async function enableAdguard(enabled) { await npCall('ag_enable', { enabled: !!enabled }); }
+  async function connectAdguard(user, password) { await npCall('ag_connect', { user, password }); }
+  async function setAdguardProtection(enabled, minutes = 0) { await npCall('ag_protection', { enabled: !!enabled, minutes: +minutes || 0 }); }
+  let agServicesCache = null;
+  async function getAdguardServices() {
+    if (!agServicesCache) agServicesCache = (await npCall('ag_services', {})).services || [];
+    return agServicesCache;
+  }
+  async function getAdguardGlobal() { return (await npCall('ag_global_get', {})).services || []; }
+  async function setAdguardGlobal(services) { await npCall('ag_global_set', { services }); }
+  // cihaz: { custom, filtering, parental, safesearch, services[] }
+  async function getAdguardClient(mac, ip) { return npCall('ag_client_get', { mac, ip: ip || '' }); }
+  async function setAdguardClient(mac, ip, name, o) {
+    return npCall('ag_client_set', { mac, ip: ip || '', name: name || '', filtering: o.filtering !== false, parental: !!o.parental, safesearch: !!o.safesearch, services: o.services || [] });
+  }
+  // Öne çıkan servisler (AdGuard kimlikleri); listede olmayanlar gizlenir
+  const AG_POPULAR = ['youtube', 'tiktok', 'instagram', 'facebook', 'twitter', 'snapchat', 'whatsapp', 'telegram', 'discord', 'roblox', 'minecraft', 'fortnite', 'steam', 'epic_games', 'twitch', 'netflix', 'spotify', 'reddit', 'pinterest', 'tinder', '9gag', 'kick'];
+
+  /* ── Zamanlanmış hız testi ─────────────────────────────────────────────── */
+  async function getSpeedSchedule() { return npCall('st_sched_get', {}); }
+  async function setSpeedSchedule(o) { await npCall('st_sched_set', { enabled: !!o.enabled, hour: +o.hour, wan: o.wan || '' }); }
 
   // Ağ tarayıcı: startScan({ports}) sonra getScan() ile durum/sonuç
   // -> { running, phase ('ping'|'ports'|'done'|'idle'|'error'), done, total, started(ms), finished(ms),
@@ -1414,7 +1451,9 @@
     ] };
     const demoNotify = { enabled: false, chat_id: '', token_set: false, wan: true, newdev: true, curl: true };
     const demoTz = { zonename: 'UTC', timezone: 'GMT0' };
-    const demoInteg = { cloudflare: true, scanner: false };
+    const demoInteg = { cloudflare: true, scanner: false, vpn: false, adguard: false };
+    const demoAg = { configured: false, active: false, protection: true, global: [], clients: {} };
+    const demoSt = { enabled: false, hour: 4, wan: '' };
     let demoScan = null;
     const demoUpd = { current: '1.2.0', auto: false, t0: 0 };
     const demoWans = [{ name: 'Turknet', ip: '100.66.93.98', kind: 'cgnat' }, { name: 'wan2', ip: '192.168.2.212', kind: 'private' }];
@@ -1574,7 +1613,7 @@
               signal: online && w ? d.sig + Math.round(Math.random() * 4 - 2) : null,
               rx_bytes: Math.floor(cnt[d.mac].rx), tx_bytes: Math.floor(cnt[d.mac].tx),
               limit_down: m.down || 0, limit_up: m.up || 0, blocked: !!m.blocked, lease_expires: 0,
-              type: m.type || '', vendor: d.manu || '', web: d.web || [], priority: !!m.priority, schedule: m.schedule || [], sched_blocked: !!m.schedBlockedDemo,
+              type: m.type || '', vendor: d.manu || '', web: d.web || [], priority: !!m.priority, presence: !!m.presence, schedule: m.schedule || [], sched_blocked: !!m.schedBlockedDemo,
               via: !w && d.hb ? 'huawei' : 'router',
               band: !w && d.hb && d.hb !== 'LAN' ? (d.hb[0] === '2' ? '2g' : '5g') : '',
               ...(!w && d.hb && d.hb !== 'LAN' ? { conn: 'wifi' } : {}),
@@ -1590,6 +1629,7 @@
         if (a.blocked != null) m.blocked = a.blocked;
         if (a.type != null) m.type = a.type;
         if (a.priority != null) m.priority = a.priority;
+        if (a.presence != null) m.presence = a.presence;
         if (a.schedule != null) m.schedule = a.schedule;
         if (a.static === true) {
           const other = Object.keys(statics).find((k) => statics[k] === a.ip && k !== a.mac);
@@ -1640,7 +1680,22 @@
       'netpanel.backup_create': () => ({ ok: true, name: 'netos-yedek-demo.tar.gz', size: 18, data: btoa('NetOS demo yedek\n') }),
       'netpanel.backup_restore': (a) => (a.data && a.data.length > 10 ? { ok: false, error: 'Demo modunda geri yükleme yapılmaz' } : { ok: false, error: 'Bu bir OpenWrt yedeği değil (etc/config yok)' }),
       'netpanel.cf_status': () => JSON.parse(JSON.stringify(demoCf)),
-      'netpanel.integ_get': () => ({ huawei: !!hw.enabled, cloudflare: demoInteg.cloudflare, scanner: demoInteg.scanner, cloudflared: true, curl: true }),
+      'netpanel.integ_get': () => ({ huawei: !!hw.enabled, cloudflare: demoInteg.cloudflare, scanner: demoInteg.scanner, vpn: demoInteg.vpn, adguard: demoInteg.adguard, cloudflared: true, adguardhome: true, curl: true }),
+      'netpanel.ag_status': () => ({ installed: true, configured: demoAg.configured, running: demoAg.configured, active: demoAg.active, creds: demoAg.configured, web_port: 3000, lan_ip: '192.168.1.1',
+        stats: demoAg.configured ? { protection: demoAg.protection, version: '0.107.73', disabled_until: null, queries: 48213, blocked: 9137, avg_ms: 11.4,
+          top_blocked: [['googleads.g.doubleclick.net', 1843], ['graph.facebook.com', 1210], ['app-measurement.com', 977], ['mcs.tiktokv.com', 702], ['data.mistat.xiaomi.com', 611], ['ads.youtube.com', 433]].map(([name, count]) => ({ name, count })),
+          top_clients: [['192.168.1.120', 18000], ['192.168.1.105', 9000]].map(([name, count]) => ({ name, count })) } : null }),
+      'netpanel.ag_setup': (a) => { if ((a.password || '').length < 8) return { ok: false, error: 'Şifre 8-64 karakter olmalı' }; demoAg.configured = demoAg.active = true; return { ok: true, web: 'http://192.168.1.1:3000' }; },
+      'netpanel.ag_enable': (a) => { demoAg.active = !!a.enabled; return { ok: true }; },
+      'netpanel.ag_connect': () => ({ ok: true }),
+      'netpanel.ag_protection': (a) => { demoAg.protection = !!a.enabled; return { ok: true }; },
+      'netpanel.ag_services': () => ({ services: [['youtube', 'YouTube'], ['tiktok', 'TikTok'], ['instagram', 'Instagram'], ['facebook', 'Facebook'], ['twitter', 'X (Twitter)'], ['snapchat', 'Snapchat'], ['whatsapp', 'WhatsApp'], ['telegram', 'Telegram'], ['discord', 'Discord'], ['roblox', 'Roblox'], ['minecraft', 'Minecraft'], ['fortnite', 'Fortnite'], ['steam', 'Steam'], ['epic_games', 'Epic Games'], ['twitch', 'Twitch'], ['netflix', 'Netflix'], ['spotify', 'Spotify'], ['reddit', 'Reddit'], ['pinterest', 'Pinterest'], ['tinder', 'Tinder'], ['9gag', '9GAG'], ['kick', 'Kick'], ['amazon', 'Amazon'], ['ebay', 'eBay']].map(([id, name]) => ({ id, name, group: '' })) }),
+      'netpanel.ag_global_get': () => ({ services: demoAg.global.slice() }),
+      'netpanel.ag_global_set': (a) => { demoAg.global = a.services.slice(); return { ok: true }; },
+      'netpanel.ag_client_get': (a) => ({ custom: !!demoAg.clients[a.mac], filtering: true, parental: false, safesearch: false, services: [], ...(demoAg.clients[a.mac] || {}) }),
+      'netpanel.ag_client_set': (a) => { const def = a.filtering && !a.parental && !a.safesearch && !a.services.length; if (def) delete demoAg.clients[a.mac]; else demoAg.clients[a.mac] = { filtering: a.filtering, parental: a.parental, safesearch: a.safesearch, services: a.services }; return { ok: true, custom: !def }; },
+      'netpanel.st_sched_get': () => ({ ...demoSt }),
+      'netpanel.st_sched_set': (a) => { Object.assign(demoSt, { enabled: !!a.enabled, hour: a.hour, wan: a.wan }); return { ok: true }; },
       'netpanel.integ_set': (a) => { if (a.id === 'huawei') hw.enabled = !!a.enabled; else demoInteg[a.id] = !!a.enabled; return { ok: true }; },
       'netpanel.scan_start': (a) => {
         if (a.range && !/^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(a.range)) return { ok: false, error: 'Yalnız yerel (özel) adresler taranabilir: 10.x, 172.16-31.x, 192.168.x' };
@@ -1798,6 +1853,8 @@
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
     getPortForwards, savePortForward, deletePortForward, setUpnp, getLan, setLan, confirmLan, revertLan,
     getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,
+    getAdguard, setupAdguard, enableAdguard, connectAdguard, setAdguardProtection, getAdguardServices, getAdguardGlobal, setAdguardGlobal,
+    getAdguardClient, setAdguardClient, AG_POPULAR, getSpeedSchedule, setSpeedSchedule,
     getIntegrations, setIntegration, startScan, getScan, wakeOnLan, getUpdate, applyUpdate, getUpdateStatus, setAutoUpdate, TYPE_LABELS: TYPES,
     getSqm, setSqm, deleteSqm, setOffload, startSpeedtest, getSpeedtest, SQM_PRESETS, GRADE_TEXT, SPEED_SERVERS,
     TYPES,

@@ -26,7 +26,12 @@
 					"pf_list",
 					"lan_get",
 					"wg_status",
-					"pkg_status"
+					"pkg_status",
+					"ag_status",
+					"ag_services",
+					"ag_global_get",
+					"ag_client_get",
+					"st_sched_get"
 				],
 				"system": [
 					"board",
@@ -115,7 +120,14 @@
 					"wg_add",
 					"wg_delete",
 					"qr",
-					"pkg_install"
+					"pkg_install",
+					"ag_setup",
+					"ag_enable",
+					"ag_connect",
+					"ag_protection",
+					"ag_global_set",
+					"ag_client_set",
+					"st_sched_set"
 				],
 				"system": [
 					"reboot"

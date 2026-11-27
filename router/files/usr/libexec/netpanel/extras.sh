@@ -157,20 +157,26 @@ backup_restore() {
 }
 
 # ── entegrasyonlar: hangi eklentinin arayüzde açık olduğu ───────────────────
-# netpanel.integrations.<ad> = 0|1 (cloudflare, scanner). Huawei kendi netpanel.huawei.enabled ayarını kullanır.
-INTEGS="cloudflare scanner"
-integ_on() { # ad -> 0|1 (ayar yoksa varsayılan)
+# netpanel.integrations.<ad> = 0|1 (cloudflare, scanner, vpn, adguard). Huawei kendi netpanel.huawei.enabled ayarını kullanır.
+INTEGS="cloudflare scanner vpn adguard"
+integ_on() { # ad -> 0|1 (ayar yoksa varsayılan: zaten kuruluysa açık başlar)
 	local v
 	v=$(uci -q get "netpanel.integrations.$1")
 	[ -n "$v" ] && { echo "$v"; return; }
 	case "$1" in
-	cloudflare) [ -n "$(uci -q get cloudflared.config.token)" ] && echo 1 || echo 0 ;; # tünel zaten kuruluysa açık başlasın
+	cloudflare) [ -n "$(uci -q get cloudflared.config.token)" ] && echo 1 || echo 0 ;;
+	vpn) [ "$(uci -q get network.netos_wg)" = interface ] && echo 1 || echo 0 ;;
+	adguard) [ -n "$(uci -q get dhcp.@dnsmasq[0].port)" ] && [ "$(uci -q get dhcp.@dnsmasq[0].port)" != 53 ] && echo 1 || echo 0 ;;
 	*) echo 0 ;;
 	esac
 }
+jbool() { [ "$1" = 1 ] && echo true || echo false; }
 integ_get() {
-	printf '{"huawei":%s,"cloudflare":%s,"scanner":%s,"cloudflared":%s,"curl":%s}
-' 		"$([ "$(uci -q get netpanel.huawei.enabled)" = 1 ] && echo true || echo false)" 		"$([ "$(integ_on cloudflare)" = 1 ] && echo true || echo false)" 		"$([ "$(integ_on scanner)" = 1 ] && echo true || echo false)" 		"$([ -x /usr/bin/cloudflared ] && echo true || echo false)" 		"$(command -v curl >/dev/null && echo true || echo false)"
+	printf '{"huawei":%s,"cloudflare":%s,"scanner":%s,"vpn":%s,"adguard":%s,"cloudflared":%s,"adguardhome":%s,"curl":%s}\n' \
+		"$(jbool "$(uci -q get netpanel.huawei.enabled)")" \
+		"$(jbool "$(integ_on cloudflare)")" "$(jbool "$(integ_on scanner)")" "$(jbool "$(integ_on vpn)")" "$(jbool "$(integ_on adguard)")" \
+		"$([ -x /usr/bin/cloudflared ] && echo true || echo false)" "$([ -x /usr/bin/AdGuardHome ] && echo true || echo false)" \
+		"$(command -v curl >/dev/null && echo true || echo false)"
 }
 integ_set() {
 	local input id en
@@ -181,7 +187,7 @@ integ_set() {
 	huawei)
 		[ "$(uci -q get netpanel.huawei)" = huawei ] || uci set netpanel.huawei=huawei
 		uci set "netpanel.huawei.enabled=$en" ;;
-	cloudflare | scanner)
+	cloudflare | scanner | vpn | adguard)
 		[ "$(uci -q get netpanel.integrations)" = integrations ] || uci set netpanel.integrations=integrations
 		uci set "netpanel.integrations.$id=$en" ;;
 	*) err "Bilinmeyen entegrasyon" ;;
@@ -190,7 +196,27 @@ integ_set() {
 	echo '{"ok":true}'
 }
 
+# ── zamanlanmış hız testi (collect.sh dakikalık çalışırken saati gelince başlatır) ──
+st_sched_get() {
+	printf '{"enabled":%s,"hour":%d,"wan":"%s"}\n' "$(jbool "$(uci -q get netpanel.stsched.enabled)")" \
+		"$(uci -q get netpanel.stsched.hour || echo 4)" "$(uci -q get netpanel.stsched.wan)"
+}
+st_sched_set() {
+	local input en h w
+	input=$(cat); json_load "$input" 2>/dev/null || err "Geçersiz istek"
+	json_get_var en enabled; json_get_var h hour; json_get_var w wan
+	num "$h" && [ "$h" -le 23 ] || err "Saat 0-23 arasında olmalı"
+	case "$w" in *[!A-Za-z0-9_.-]*) err "Geçersiz hat" ;; esac
+	[ -z "$w" ] || [ "$w" = all ] || np_wan_nets | grep -qx "$w" || err "Bilinmeyen internet hattı"
+	[ "$(uci -q get netpanel.stsched)" = stsched ] || uci set netpanel.stsched=stsched
+	uci set "netpanel.stsched.enabled=$([ "$en" = 1 ] && echo 1 || echo 0)"
+	uci set "netpanel.stsched.hour=$h"
+	uci set "netpanel.stsched.wan=$w"
+	uci commit netpanel
+	echo '{"ok":true}'
+}
+
 case "$1" in
-usage_get | ping_get | newdev_list | newdev_ack | notify_get | notify_set | notify_test | tz_get | tz_set | backup_create | backup_restore | integ_get | integ_set) "$1" ;;
+usage_get | ping_get | newdev_list | newdev_ack | notify_get | notify_set | notify_test | tz_get | tz_set | backup_create | backup_restore | integ_get | integ_set | st_sched_get | st_sched_set) "$1" ;;
 *) echo "kullanım: $0 <komut>" >&2; exit 1 ;;
 esac

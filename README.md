@@ -20,6 +20,7 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 - Yerel ağ: router IP'si, DHCP aralığı, kira süresi, cihazlara verilen DNS (IP değişiminde 3 dk geri alma)
 - WireGuard VPN sunucusu: cihaz ekle → QR kodu telefona okut
 - Wi-Fi'yi QR kod ile paylaşma
+- Cihaz eve geldi / ayrıldı bildirimi (Telegram), günlük zamanlanmış hız testi
 - Cloudflare Tunnel: token yapıştırarak ya da API token ile otomatik kurulum
   (tünel + DNS + Cloudflare Access e-posta koruması). API token router'a kaydedilmez.
 
@@ -50,6 +51,8 @@ NetOS → Entegrasyon menüsünden ihtiyacınız olanı açın; kapalı olanlar 
 | Entegrasyon | Ne yapar | Durum |
 |---|---|---|
 | Huawei WiFi AX2 / WS5200 | Wi-Fi aç/kapa, ağ adı, şifre, kanal, kanal analizi | Hazır |
+| AdGuard Home | Tek tıkla kurulum; tüm ağda reklam engelleme, cihaz başına YouTube/TikTok engeli, güvenli arama | Hazır |
+| WireGuard VPN | VPN sunucusu, cihaz başına QR kod | Hazır |
 | Cloudflare Tunnel | Port açmadan dışarıdan erişim, DNS + Access otomatik kurulum | Hazır |
 | Ağ tarayıcı | IP tarama (özel aralık), tahmini cihaz tipi, açık port, web arayüzü, Wake-on-LAN, CSV | Hazır |
 | TP-Link Archer BE230 | Wi-Fi erişim noktası kontrolü | Geliştiriliyor |

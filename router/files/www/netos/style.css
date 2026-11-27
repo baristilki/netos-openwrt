@@ -2685,3 +2685,16 @@ input.field {
 .alert.subtle, .lan-moving .alert { display: block; }
 .x-panel .alert { display: block; }
 [hidden] { display: none !important; }
+
+/* ═══ AdGuard / cihaz ekleri ═══ */
+.x-rank.ag-rank { grid-template-columns: minmax(120px, 260px) 1fr auto; }
+.ag-svcs .chip-row { margin-top: 6px; }
+.chip.svc { font-size: 12px; padding: 5px 11px; }
+.chip.svc.active { background: var(--red-bg); border-color: var(--red); color: var(--red); text-decoration: line-through; text-decoration-thickness: 1px; }
+.ag-more { margin-top: 10px; }
+.ag-more summary { cursor: pointer; font-size: 12.5px; color: var(--accent); font-weight: 650; }
+.ag-intro p { margin-top: 0; }
+.x-devx .toggle-line strong, .x-agc .x-sched-head strong { display: inline-flex; align-items: center; gap: 6px; }
+.x-devx svg, .x-agc .x-sched-head svg { width: 16px; height: 16px; }
+.x-agc .toggle-line { padding: 8px 0; }
+@media (max-width: 767px) { .x-rank.ag-rank { grid-template-columns: minmax(0, 1fr) auto; } .x-rank.ag-rank .x-track { grid-column: 1 / -1; grid-row: 2; } }

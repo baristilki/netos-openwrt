@@ -5,6 +5,8 @@
 #   collect.sh ping       -> her WAN için ping/kayıp örneği
 #   collect.sh sched      -> saat planını nft setlerine uygula (netpanel-apply sonrası da çağrılır)
 #   collect.sh seed       -> bilinen cihaz listesini mevcut cihazlarla doldur (yeni cihaz bildirimi için)
+#   collect.sh presence   -> takip edilen cihazlar eve geldi / ayrıldı bildirimi
+#   collect.sh stsched    -> zamanlanmış hız testi saati geldiyse başlat
 #
 # Veri: /etc/netpanel/usage/YYYY-MM-DD.tsv  (anahtar \t indirme_bayt \t yükleme_bayt; anahtar = mac | wan:<ad>)
 #       /etc/netpanel/ping/YYYY-MM-DD.tsv   (zaman \t wan \t ort_ms \t kayıp_%)
@@ -126,14 +128,61 @@ seed() {
 	} | grep -E '^([0-9a-f]{2}:){5}[0-9a-f]{2}$' | sort -u >"$DATA/known"
 }
 
+# ── cihaz geldi / gitti bildirimi ───────────────────────────────────────────
+# netpanel.<cihaz>.presence=1 olan cihazlar: ping + ARP ile kontrol. Telefonlar uykuda ağdan düşebildiği
+# için "ayrıldı" ancak AWAY_MIN dakika boyunca hiç görülmezse sayılır.
+AWAY_MIN=${NP_AWAY_MIN:-10}
+presence() {
+	local dir="$RUN/presence" now mac name ip on st last f
+	mkdir -p "$dir"
+	now=$(date +%s)
+	uci -q show netpanel | awk -v q="'" '
+		{ k = substr($0, 1, index($0, "=") - 1); v = substr($0, index($0, "=") + 1); gsub(q, "", v); n = split(k, p, ".") }
+		n == 3 && p[3] == "mac" { mac[p[2]] = tolower(v) }
+		n == 3 && p[3] == "name" { nm[p[2]] = v }
+		n == 3 && p[3] == "presence" && v == "1" { pr[p[2]] = 1 }
+		END { for (s in pr) if (mac[s] != "") printf "%s\t%s\n", mac[s], (nm[s] != "" ? nm[s] : mac[s]) }' >"$dir/list"
+	while IFS='	' read -r mac name; do
+		[ -n "$mac" ] || continue
+		on=0
+		ip=$(np_ip_for_mac "$mac")
+		if np_valid_ip "$ip"; then
+			ping -c 1 -W 1 "$ip" >/dev/null 2>&1 && on=1
+			[ $on = 1 ] || np_neigh | awk -F'\t' -v m="$mac" '$1 == m && $4 ~ /REACHABLE|DELAY|PROBE/ { f = 1 } END { exit !f }' && on=1
+		fi
+		f="$dir/$(echo "$mac" | tr -d :)"
+		read -r st last 2>/dev/null <"$f" || { st=$on; last=$now; }
+		if [ $on = 1 ]; then
+			[ "$st" = 0 ] && np_notify "$name eve geldi." presence >/dev/null 2>&1
+			echo "1 $now" >"$f"
+		elif [ "$st" = 1 ] && [ $((now - last)) -ge $((AWAY_MIN * 60)) ]; then
+			np_notify "$name evden ayrıldı (son görülme $(date -d "@$last" +%H:%M 2>/dev/null || date +%H:%M))." presence >/dev/null 2>&1
+			echo "0 $last" >"$f"
+		else
+			echo "$st $last" >"$f"
+		fi
+	done <"$dir/list"
+}
+
+# ── zamanlanmış hız testi ───────────────────────────────────────────────────
+stsched() {
+	[ "$(uci -q get netpanel.stsched.enabled)" = 1 ] || return 0
+	[ "$(date +%H:%M)" = "$(printf '%02d:00' "$(uci -q get netpanel.stsched.hour || echo 4)")" ] || return 0
+	printf '{"wan":"%s"}' "$(uci -q get netpanel.stsched.wan)" | /usr/libexec/netpanel/sqmctl.sh st_start >/dev/null 2>&1
+}
+
 case "${1:-all}" in
 usage) usage ;;
 ping) ping_hist ;;
 sched) sched "$2" ;;
 seed) seed ;;
+presence) presence ;;
+stsched) stsched ;;
 all)
 	seed
 	sched
+	stsched
+	presence &
 	usage
 	ping_hist
 	;;
