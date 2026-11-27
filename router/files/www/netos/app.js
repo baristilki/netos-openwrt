@@ -76,6 +76,10 @@
       eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
       eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',
       lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
+      edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16zM14 6l4 4"/></svg>',
+      trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6"/></svg>',
+      vpn: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.4 8-8 9-4.6-1-8-4.5-8-9V6z"/><circle cx="12" cy="11" r="2"/><path d="M12 13v3"/></svg>',
+      qr: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 14h2M14 18h2M18 18h2v2"/></svg>',
       plug: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7V3M15 7V3M6 7h12v4a6 6 0 0 1-12 0zM12 17v4"/></svg>',
       logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg>',
       radar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
@@ -87,9 +91,9 @@
   const APP_VERSION = '1.2.0';
   // [yol, ikon, ad, mobil alt menüde mi (değilse "Menü" sayfasında)]
   const navGroups = [
-    ['Ağ', [['/', 'home', 'Ana sayfa', 1], ['/internet', 'globe', 'İnternet', 1], ['/devices', 'devices', 'Cihazlar', 1], ['/wifi', 'wifi', 'Wi-Fi', 1]]],
+    ['Ağ', [['/', 'home', 'Ana sayfa', 1], ['/internet', 'globe', 'İnternet', 1], ['/devices', 'devices', 'Cihazlar', 1], ['/wifi', 'wifi', 'Wi-Fi', 1], ['/lan', 'router', 'Yerel ağ'], ['/ports', 'shield', 'Port yönlendirme']]],
     ['Analiz', [['/speed', 'speed', 'Hız & Ping'], ['/stats', 'chart', 'İstatistik'], ['/scanner', 'radar', 'Ağ tarayıcı', 0, 'scanner']]],
-    ['Yönetim', [['/integrations', 'plug', 'Entegrasyon'], ['/system', 'system', 'Sistem']]],
+    ['Yönetim', [['/vpn', 'vpn', 'VPN'], ['/integrations', 'plug', 'Entegrasyon'], ['/system', 'system', 'Sistem']]],
   ];
   const navItems = navGroups.flatMap((g) => g[1]);
   // 5. alan: yalnız o entegrasyon açıkken görünür
@@ -151,6 +155,7 @@
     state.page = location.hash.slice(1) || '/';
     state.drawerMac = null;
     state.drawerWifi = null;
+    state.xPanel = null;
     if (state.systemTimer) {
       clearInterval(state.systemTimer);
       state.systemTimer = setInterval(
@@ -179,6 +184,17 @@
     let fw = (state.overview?.firmware || '').match(/OpenWrt\s+[\w.-]+/)?.[0] || 'OpenWrt';
     let link = ([p, i, t]) => `<a href="#${p}" class="${isActive(p) ? 'active' : ''}"${isActive(p) ? ' aria-current="page"' : ''}>${icon(i)}<span>${t}</span></a>`;
     if (NP.hasSession() && !state.xInteg && !state.xIntegError) loadX('xInteg', () => NP.getIntegrations());
+    if (NP.hasSession() && !state.lanChecked) {
+      state.lanChecked = true;
+      NP.getLan()
+        .then((l) => {
+          if (l.pending) {
+            state.lanPending = l.pending;
+            render();
+          }
+        })
+        .catch(() => {});
+    }
     let side = navGroups.map(([g, items]) => `<div class="nav-group"><div class="nav-label">${g}</div>${items.filter(navShown).map(link).join('')}</div>`).join('');
     let mobileMain = navItems.filter((x) => x[3]);
     let moreActive = !mobileMain.some((x) => isActive(x[0]));
@@ -396,7 +412,7 @@
     let rows = bands
       .map((b) => {
         let ch = b.band === 'both' ? '' : b.auto ? `Kanal: otomatik (şu an ${b.actualChannel || '—'})` : `Kanal: ${b.channel}`;
-        return `<div class="wifi-row hw-wifi-row"><span class="wifi-glyph ${b.enabled ? '' : 'off'}">${icon('wifi')}</span><div class="wifi-info"><div class="wifi-name">${esc(b.ssid)}${b.hidden ? ' <span class="badge">Gizli</span>' : ''}</div><div class="wifi-sub"><span class="badge">${esc(b.bandLabel)}</span> · ${esc(b.securityLabel)}${ch ? ' · ' + esc(ch) : ''}</div></div><div class="wifi-right"><button class="btn small" data-hw-edit="${esc(b.band)}">Düzenle</button></div></div>`;
+        return `<div class="wifi-row hw-wifi-row"><span class="wifi-glyph ${b.enabled ? '' : 'off'}">${icon('wifi')}</span><div class="wifi-info"><div class="wifi-name">${esc(b.ssid)}${b.hidden ? ' <span class="badge">Gizli</span>' : ''}</div><div class="wifi-sub"><span class="badge">${esc(b.bandLabel)}</span> · ${esc(b.securityLabel)}${ch ? ' · ' + esc(ch) : ''}</div></div><div class="wifi-right"><button class="btn small" data-hw-edit="${esc(b.band)}">Düzenle</button><button class="btn small" type="button" data-wifi-qr="${esc(b.band)}" title="QR kod ile paylaş">${icon('qr')}QR</button></div></div>`;
       })
       .join('');
     let note = w.dbho
@@ -1012,6 +1028,217 @@
     setTimeout(() => pollUpdate(t0), 2000);
   }
 
+  /* ═══ Ağ özellikleri: port yönlendirme, yerel ağ, VPN, QR ═══════════════ */
+  // Açılır panel (sağdan çekmece). Sayfa yeniden çizilince state.xPanel'e göre tekrar açılır.
+  function drawXPanel() {
+    let p = state.xPanel,
+      host = document.getElementById('drawer-host');
+    if (!p || !host) return;
+    let v = { pf: pfPanel, qr: qrPanel, peer: peerPanel }[p.kind]?.(p);
+    if (!v) return;
+    let prev = host.querySelector('.drawer-body')?.scrollTop || 0;
+    host.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open x-panel" role="dialog" aria-modal="true" aria-label="${esc(v.title)}"><div class="drawer-head"><div class="integ-top"><span class="integ-icon">${icon(v.icon)}</span><div><div class="eyebrow">${esc(v.eyebrow)}</div><h2>${esc(v.title)}</h2>${v.sub ? `<p>${esc(v.sub)}</p>` : ''}</div></div><button class="icon-btn" type="button" aria-label="Kapat" data-close-drawer>${icon('x')}</button></div><div class="drawer-body">${v.body}</div></aside>`;
+    host.querySelector('.drawer-body').scrollTop = prev;
+  }
+  function openXPanel(p) {
+    state.xPanel = p;
+    drawXPanel();
+  }
+  // Gerekli paket kurulu değilse: açıklama + "Kur" düğmesi + ilerleme
+  function pkgGate(set, what, size) {
+    let st = state.pkgRun?.[set];
+    let body = st?.running
+      ? `<div class="scan-progress"><div class="scan-bar indeterminate"><i></i></div><span>Paket indiriliyor ve kuruluyor… (internet gerekir, 10-60 sn)</span></div>`
+      : st?.failed
+        ? `<div class="form-error">Kurulum başarısız.</div>${st.log ? `<pre class="upd-log">${esc(st.log)}</pre>` : ''}<button class="btn small" type="button" data-pkg="${set}">Tekrar dene</button>`
+        : `<button class="btn primary" type="button" data-pkg="${set}">${icon('download')}Kur</button>`;
+    return `<div class="pkg-gate"><p>${what} için gerekli paket router’da kurulu değil (${size}). Kurulum OpenWrt’nin resmi paket deposundan yapılır.</p>${body}</div>`;
+  }
+  async function pollPkg(set, done) {
+    let s = null;
+    try {
+      s = await NP.pkgStatus(set);
+    } catch (_) {}
+    state.pkgRun = { ...state.pkgRun, [set]: s || { running: true } };
+    if (s?.installed) {
+      delete state.pkgRun[set];
+      toast('Paket kuruldu');
+      return done();
+    }
+    if (s && !s.running) return render();
+    render();
+    setTimeout(() => pollPkg(set, done), 2000);
+  }
+  // WAN türü uyarısı (CGNAT / başka modem arkası): port açma ve VPN dışarıdan çalışmayabilir
+  function wanWarning(wans, what) {
+    if (!wans?.length) return '';
+    let pub = wans.filter((w) => w.kind === 'public');
+    let rows = wans.map((w) => `<li><b>${esc(w.name)}</b> <span class="num">${esc(w.ip)}</span> — ${esc(w.kindLabel)}</li>`).join('');
+    if (pub.length === wans.length) return '';
+    return `<div class="alert wan-alert ${pub.length ? "" : "alert-strong"}"><strong>${pub.length ? `Bazı hatlarda ${what} dışarıdan çalışmaz.` : `Dikkat: ${what} internetten erişilemeyebilir.`}</strong><ul class="wan-kinds">${rows}</ul>${
+      pub.length
+        ? ''
+        : `<span>CGNAT hattında operatörünüzden <b>“statik/gerçek IP”</b> isteyin (çoğu zaman ücretsiz ya da düşük ücretli). Başka modemin arkasındaki hatta ise o modemde de aynı portu bu router’a (${esc(wans.find((w) => w.kind === 'private')?.ip || '')}) yönlendirin ya da DMZ yapın.${what === 'VPN' ? ' Web servisleri için Cloudflare Tunnel bu sorundan etkilenmez.' : ''}</span>`
+    }</div>`;
+  }
+  const clientByIp = (ip) => state.clients.find((c) => c.ip === ip);
+  const protoLabel = (p) => (p === 'tcp' ? 'TCP' : p === 'udp' ? 'UDP' : 'TCP+UDP');
+
+  /* ── Port yönlendirme ── */
+  const PF_PRESETS = [
+    ['Web (HTTP)', 'tcp', '80'],
+    ['HTTPS', 'tcp', '443'],
+    ['SSH', 'tcp', '22'],
+    ['Uzak masaüstü', 'tcp', '3389'],
+    ['Minecraft', 'tcp', '25565'],
+    ['Plex', 'tcp', '32400'],
+    ['Home Assistant', 'tcp', '8123'],
+    ['Oyun konsolu (Xbox)', 'tcp udp', '3074'],
+    ['Torrent', 'tcp udp', '51413'],
+  ];
+  function portsPage() {
+    if (!state.xPf && !state.xPfError) loadX('xPf', () => NP.getPortForwards(), '/ports');
+    let head = pageHead('Ağ', 'Port yönlendirme', 'İnternetten gelen bağlantıları ağınızdaki bir cihaza yönlendirin (oyun, kamera, sunucu).', '<button class="btn primary" type="button" data-pf-new>+ Kural ekle</button>');
+    if (state.xPfError) return `${head}<div class="form-error">${esc(state.xPfError)}</div>`;
+    let d = state.xPf;
+    if (!d) return `${head}<div class="empty">Yükleniyor…</div>`;
+    let rows = d.rules
+      .map((r) => {
+        let c = clientByIp(r.ip);
+        return `<div class="pf-row${r.enabled ? '' : ' off'}"><div class="pf-name"><strong>${esc(r.name || '—')}</strong><small>${protoLabel(r.proto)}</small></div><div class="pf-map"><span class="port-tag big">${esc(r.extPort)}</span><span class="pf-arrow">→</span><span class="pf-target">${c ? `<span class="type-icon tiny">${typeIcon(c.type)}</span>${esc(c.displayName)}` : ''}<span class="num">${esc(r.ip)}:${esc(r.intPort)}</span></span></div><div class="pf-act"><input class="switch" type="checkbox" data-pf-toggle="${esc(r.id)}" aria-label="Kuralı aç/kapa"${r.enabled ? ' checked' : ''}><button class="icon-btn" type="button" data-pf-edit="${esc(r.id)}" title="Düzenle" aria-label="Düzenle">${icon('edit')}</button><button class="icon-btn danger" type="button" data-pf-del="${esc(r.id)}" title="Sil" aria-label="Sil">${icon('trash')}</button></div></div>`;
+      })
+      .join('');
+    let u = d.upnp;
+    let upnpBody = !u.installed
+      ? pkgGate('upnp', 'UPnP', '~150 KB')
+      : `<div class="toggle-line"><div><strong>UPnP</strong><p>Oyun konsolları ve programlar gereken portu kendisi açar (ör. Xbox “NAT türü: Açık”). Güvenlik için yalnız ihtiyacınız varsa açın.</p></div><input class="switch" type="checkbox" data-upnp${u.enabled ? ' checked' : ''}></div>
+        ${u.enabled ? (u.leases.length ? `<h3 class="x-sub">Programların açtığı portlar</h3><div class="pf-list">${u.leases.map((l) => { let c = clientByIp(l.ip); return `<div class="pf-row"><div class="pf-name"><strong>${esc(l.desc || 'Program')}</strong><small>${esc(l.proto.toUpperCase())}</small></div><div class="pf-map"><span class="port-tag big">${esc(l.extPort)}</span><span class="pf-arrow">→</span><span class="pf-target">${c ? esc(c.displayName) + ' ' : ''}<span class="num">${esc(l.ip)}:${esc(l.intPort)}</span></span></div><div class="pf-act"></div></div>`; }).join('')}</div>` : '<p class="field-hint">Şu an UPnP ile açılmış port yok.</p>') : ''}`;
+    return `${head}${wanWarning(d.wans, 'port yönlendirme')}<div class="grid"><section class="card span-12">${cardHead('shield', 'Kurallar')}${rows ? `<div class="pf-list">${rows}</div>` : '<div class="empty">Henüz kural yok. “Kural ekle” ile bir cihaza port açın.</div>'}</section><section class="card span-12">${cardHead('plug', 'UPnP (otomatik port açma)')}${upnpBody}</section></div>`;
+  }
+  function pfPanel(p) {
+    let r = p.rule || { proto: 'tcp', extPort: '', intPort: '', ip: p.ip || '', name: '', enabled: true };
+    let devs = state.clients.filter((c) => c.ip).sort((a, b) => a.displayName.localeCompare(b.displayName, 'tr'));
+    let known = devs.some((c) => c.ip === r.ip);
+    let body = `<form id="pf-form" class="x-form" data-id="${esc(r.id || '')}">
+      ${r.id ? '' : `<div class="field-wrap"><label>Hazır şablon</label><div class="chip-row">${PF_PRESETS.map(([n, pr, port]) => `<button type="button" class="chip" data-pf-preset="${esc(n)}|${pr}|${port}">${esc(n)}</button>`).join('')}</div></div>`}
+      <div class="field-wrap"><label>Ad</label><input class="field" name="name" maxlength="40" value="${esc(r.name)}" placeholder="ör. Kamera, Minecraft sunucusu"></div>
+      <div class="field-wrap"><label>Cihaz</label><select class="field" name="dev"><option value="">IP adresini elle yaz…</option>${devs.map((c) => `<option value="${esc(c.ip)}"${c.ip === r.ip ? ' selected' : ''}>${esc(c.displayName)} — ${esc(c.ip)}${c.static ? '' : ' (sabit IP değil!)'}</option>`).join('')}</select></div>
+      <div class="field-wrap" id="pf-ip-wrap"${known ? ' hidden' : ''}><label>Hedef IP</label><input class="field num" name="ip" value="${esc(r.ip)}" placeholder="192.168.1.50" inputmode="decimal"></div>
+      <p class="field-hint" id="pf-static-hint"${devs.find((c) => c.ip === r.ip && !c.static) ? '' : ' hidden'}>Bu cihazın IP’si değişebilir; kuralın çalışmaya devam etmesi için cihaza <b>sabit IP</b> verin (Cihazlar > cihaz > Sabit IP).</p>
+      <div class="field-wrap"><label>Protokol</label><div class="seg">${['tcp', 'udp', 'tcp udp'].map((x) => `<button type="button" class="seg-btn${r.proto === x ? ' active' : ''}" data-pf-proto="${x}">${protoLabel(x)}</button>`).join('')}</div><input type="hidden" name="proto" value="${esc(r.proto)}"></div>
+      <div class="x-grid2"><div class="field-wrap"><label>Dış port (internet)</label><input class="field num" name="extPort" value="${esc(r.extPort)}" placeholder="8080 ya da 5000-5010" inputmode="numeric"></div><div class="field-wrap"><label>İç port (cihaz)</label><input class="field num" name="intPort" value="${esc(r.intPort === r.extPort ? '' : r.intPort)}" placeholder="boş = dış portla aynı" inputmode="numeric"></div></div>
+      <div class="form-error" id="pf-error"></div>
+      <div class="x-form-foot"><button type="button" class="btn" data-close-drawer>İptal</button><button class="btn primary" type="submit">${r.id ? 'Kaydet' : 'Kuralı ekle'}</button></div>
+    </form>`;
+    return { icon: 'shield', eyebrow: 'Port yönlendirme', title: r.id ? 'Kuralı düzenle' : 'Yeni kural', body };
+  }
+
+  /* ── Yerel ağ (LAN) + DHCP ── */
+  const DNS_PRESETS = [
+    ['router', 'Router (varsayılan)', []],
+    ['cloudflare', 'Cloudflare', ['1.1.1.1', '1.0.0.1']],
+    ['google', 'Google', ['8.8.8.8', '8.8.4.4']],
+    ['quad9', 'Quad9 (zararlı site engeller)', ['9.9.9.9', '149.112.112.112']],
+    ['adguard', 'AdGuard DNS (reklam engeller)', ['94.140.14.14', '94.140.15.15']],
+    ['custom', 'Özel…', null],
+  ];
+  function lanPage() {
+    if (!state.xLan && !state.xLanError) loadX('xLan', () => NP.getLan(), '/lan');
+    let head = pageHead('Ağ', 'Yerel ağ', 'Router adresi, cihazlara otomatik IP dağıtımı (DHCP) ve DNS.');
+    if (state.xLanError) return `${head}<div class="form-error">${esc(state.xLanError)}</div>`;
+    let l = state.xLan;
+    if (!l) return `${head}<div class="empty">Yükleniyor…</div>`;
+    let pre = l.ip.replace(/\.\d+$/, '.');
+    let dnsKey = DNS_PRESETS.find(([, , v]) => v && v.join(',') === l.dns.join(','))?.[0] || (l.dns.length ? 'custom' : 'router');
+    if (state.lanDns) dnsKey = state.lanDns;
+    let end = (+l.dhcp.start || 0) + (+l.dhcp.limit || 0) - 1;
+    return `${head}<form id="lan-form" class="grid">
+      <section class="card span-6">${cardHead('router', 'Router adresi')}
+        <div class="field-wrap"><label>IP adresi</label><input class="field num" name="ip" value="${esc(l.ip)}" inputmode="decimal" ${l.prefix !== 24 ? 'disabled' : ''}></div>
+        <p class="field-hint">Ağ maskesi 255.255.255.0 (/${l.prefix}). Adres değişirse paneli yeni adresten açmanız gerekir; ${l.staticHosts} sabit IP kaydı, port kuralları ve Huawei adresi yeni ağa otomatik taşınır.</p>
+        <div class="alert subtle">Adres değiştikten sonra bilgisayarınızın Wi-Fi’sini/kablosunu kapatıp açın ki yeni adres alsın. <b>3 dakika</b> içinde yeni adresten girip onaylamazsanız eski ayara otomatik dönülür.</div>
+      </section>
+      <section class="card span-6">${cardHead('devices', 'DHCP (otomatik IP)')}
+        <div class="toggle-line"><div><strong>DHCP sunucusu</strong><p>Kapatırsanız cihazlar IP alamaz (ağda başka DHCP sunucusu yoksa).</p></div><input class="switch" type="checkbox" name="dhcpEnabled"${l.dhcp.enabled ? ' checked' : ''}></div>
+        <div class="x-grid2"><div class="field-wrap"><label>Başlangıç</label><div class="ip-suffix"><span class="num">${esc(pre)}</span><input class="field num" name="start" type="number" min="2" max="253" value="${esc(l.dhcp.start)}"></div></div><div class="field-wrap"><label>Cihaz sayısı</label><input class="field num" name="limit" type="number" min="1" max="253" value="${esc(l.dhcp.limit)}"></div></div>
+        <p class="field-hint" id="lan-range">Dağıtılan adresler: <b class="num">${esc(pre + l.dhcp.start)} – ${esc(pre + end)}</b></p>
+        <div class="field-wrap"><label>Kira süresi</label><select class="field" name="leasetime">${[['1h', '1 saat'], ['12h', '12 saat'], ['24h', '1 gün'], ['7d', '1 hafta']].concat([[l.dhcp.leasetime, l.dhcp.leasetime]]).filter((x, i, a) => a.findIndex((y) => y[0] === x[0]) === i).map(([v, t]) => `<option value="${esc(v)}"${v === l.dhcp.leasetime ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select></div>
+      </section>
+      <section class="card span-12">${cardHead('globe', 'Cihazlara verilen DNS')}
+        <p class="field-hint">Cihazlar alan adlarını hangi sunucuya soracak. “Router” seçiliyse istekler routerdan geçer (AdGuard Home gibi bir engelleyici kuruluysa çalışmaya devam eder).</p>
+        <div class="dns-options">${DNS_PRESETS.map(([k, t, v]) => `<label class="dns-opt${dnsKey === k ? ' on' : ''}"><input type="radio" name="dnsPreset" value="${k}"${dnsKey === k ? ' checked' : ''}><span><strong>${esc(t)}</strong>${v?.length ? `<small class="num">${esc(v.join(' · '))}</small>` : k === 'router' ? `<small class="num">${esc(l.ip)}</small>` : ''}</span></label>`).join('')}</div>
+        <div class="field-wrap" id="dns-custom"${dnsKey === 'custom' ? '' : ' hidden'}><label>DNS sunucuları (virgülle, en fazla 3)</label><input class="field num" name="dnsCustom" value="${esc(dnsKey === 'custom' ? l.dns.join(', ') : '')}" placeholder="1.1.1.1, 9.9.9.9"></div>
+        <div class="form-error" id="lan-error"></div>
+        <div class="x-form-foot"><button class="btn primary" type="submit">Kaydet</button></div>
+      </section></form>`;
+  }
+  // IP değişikliği sonrası: her sayfanın üstünde onay şeridi
+  function lanPendingBanner() {
+    let p = state.lanPending;
+    if (!p || Date.now() > p.until) return '';
+    let left = Math.max(0, Math.round((p.until - Date.now()) / 1000));
+    return `<div class="alert lan-pending"><div><strong>Yeni router adresi: ${esc(p.newIp)}</strong><span>Her şey çalışıyorsa onaylayın. <b id="lan-left">${left}</b> sn içinde onaylanmazsa eski adrese (${esc(p.oldIp)}) dönülür.</span></div><button class="btn small primary" type="button" data-lan-confirm>Onayla</button><button class="btn small" type="button" data-lan-revert>Geri al</button></div>`;
+  }
+
+  /* ── VPN (WireGuard) ── */
+  function vpnPage() {
+    if (!state.xVpn && !state.xVpnError) loadX('xVpn', () => NP.getVpn(), '/vpn');
+    let head = pageHead('Uzaktan erişim', 'VPN (WireGuard)', 'Dışarıdayken telefonunuzdan ya da bilgisayarınızdan ev ağınıza güvenle bağlanın.');
+    if (state.xVpnError) return `${head}<div class="form-error">${esc(state.xVpnError)}</div>`;
+    let v = state.xVpn;
+    if (!v) return `${head}<div class="empty">Yükleniyor…</div>`;
+    if (!v.installed) return `${head}<section class="card">${cardHead('vpn', 'WireGuard')}${pkgGate('wireguard', 'WireGuard VPN', '~1 MB')}</section>`;
+    let warn = wanWarning(v.wans, 'VPN');
+    let autoEp = v.wans.find((w) => w.kind === 'public')?.ip || '';
+    if (!v.configured)
+      return `${head}${warn}<section class="card">${cardHead('vpn', 'VPN sunucusunu kur')}<form id="vpn-setup" class="x-form">
+        <div class="x-grid2"><div class="field-wrap"><label>Port (UDP)</label><input class="field num" name="port" type="number" min="1024" max="65535" value="51820"></div>
+        <div class="field-wrap"><label>Dış adres</label><input class="field" name="endpoint" placeholder="${esc(autoEp || 'ev.ornek.com (DDNS) ya da IP')}"></div></div>
+        <p class="field-hint">Telefonun dışarıdan bağlanacağı adres. Boş bırakırsanız ${autoEp ? `gerçek IP’niz (${esc(autoEp)}) kullanılır; IP’niz değişiyorsa bir DDNS alan adı yazın.` : 'hattın IP’si kullanılır.'} VPN ağı: 10.99.0.0/24.</p>
+        <div class="form-error" id="vpn-error"></div><div class="x-form-foot"><button class="btn primary" type="submit">VPN sunucusunu kur</button></div></form></section>`;
+    let peers = v.peers
+      .map((p) => `<div class="pf-row"><div class="pf-name"><strong><i class="dot ${p.online ? '' : 'off'}"></i> ${esc(p.name || 'Cihaz')}</strong><small class="num">${esc(p.ip)}</small></div><div class="vpn-meta">${p.handshake ? `Son bağlantı: ${esc(new Date(p.handshake).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }))} · ↓ ${NP.fmt.bytes(p.tx)} · ↑ ${NP.fmt.bytes(p.rx)}` : 'Henüz bağlanmadı'}</div><div class="pf-act"><button class="icon-btn danger" type="button" data-vpn-del="${esc(p.id)}" title="Cihazı sil" aria-label="Cihazı sil">${icon('trash')}</button></div></div>`)
+      .join('');
+    return `${head}${warn}<div class="grid">
+      <section class="card span-5">${cardHead('vpn', 'Sunucu')}
+        <div class="toggle-line"><div><strong>VPN ${v.enabled ? 'açık' : 'kapalı'}</strong><p>${v.up ? 'Arayüz çalışıyor' : v.enabled ? 'Başlatılıyor…' : 'Kimse bağlanamaz'}</p></div><input class="switch" type="checkbox" data-vpn-enable${v.enabled ? ' checked' : ''}></div>
+        <div class="info-grid"><div><small>Port</small><strong class="num">UDP ${esc(v.port)}</strong></div><div><small>VPN ağı</small><strong class="num">${esc(v.subnet)}</strong></div></div>
+        <form id="vpn-ep" class="x-inline"><input class="field" name="endpoint" value="${esc(v.endpoint)}" placeholder="${esc(autoEp || 'Dış adres (DDNS ya da IP)')}"><button class="btn small" type="submit">Kaydet</button></form>
+        <p class="field-hint">Dış adres değişirse cihazların yeniden eklenmesi gerekir.</p>
+      </section>
+      <section class="card span-7">${cardHead('devices', 'Cihazlar', '<button class="btn small primary" type="button" data-vpn-add>+ Cihaz ekle</button>')}${peers ? `<div class="pf-list">${peers}</div>` : '<div class="empty">Henüz cihaz yok. “Cihaz ekle” ile telefonunuz için QR kod oluşturun.</div>'}</section>
+    </div>`;
+  }
+  function peerPanel(p) {
+    if (p.result) {
+      let r = p.result;
+      return {
+        icon: 'vpn', eyebrow: 'VPN cihazı', title: p.name, sub: r.ip,
+        body: `<div class="alert">Bu QR kod ve dosya <b>yalnız şimdi</b> gösterilir; içindeki gizli anahtar router’da saklanmaz. Kaybederseniz cihazı silip yeniden ekleyin.</div>
+          <ol class="x-steps"><li>Telefona <b>WireGuard</b> uygulamasını kurun (App Store / Google Play).</li><li><b>+</b> → <b>QR kodu tara</b> ile aşağıdaki kodu okutun.</li><li>Tüneli açın; ev ağınıza bağlısınız.</li></ol>
+          ${r.qr ? `<div class="qr-box">${r.qr}</div>` : '<p class="field-hint">QR kod için qrencode paketi yok; dosyayı indirip uygulamaya aktarın.</p>'}
+          <div class="x-form-foot"><button class="btn small" type="button" data-copy-conf>Yapılandırmayı kopyala</button><button class="btn small primary" type="button" data-dl-conf>.conf dosyasını indir</button></div>
+          <details class="upd-notes"><summary>Yapılandırma metni</summary><pre>${esc(r.config)}</pre></details>`,
+      };
+    }
+    return {
+      icon: 'vpn', eyebrow: 'VPN', title: 'Cihaz ekle',
+      body: `<form id="peer-form" class="x-form"><div class="field-wrap"><label>Cihaz adı</label><input class="field" name="name" maxlength="32" placeholder="ör. Telefonum" required></div>
+        <div class="field-wrap"><label>Trafik</label><label class="dns-opt on"><input type="radio" name="full" value="1" checked><span><strong>Tüm internet VPN’den</strong><small>Kafe Wi-Fi’ları gibi güvensiz ağlarda önerilir</small></span></label><label class="dns-opt"><input type="radio" name="full" value="0"><span><strong>Yalnız ev ağı</strong><small>İnternet telefondan doğrudan çıkar; daha hızlı</small></span></label></div>
+        <div class="form-error" id="peer-error"></div><div class="x-form-foot"><button type="button" class="btn" data-close-drawer>İptal</button><button class="btn primary" type="submit">Oluştur</button></div></form>`,
+    };
+  }
+
+  /* ── Wi-Fi QR ── */
+  function qrPanel(p) {
+    let body = p.svg
+      ? `<p class="field-hint">Telefonun kamerasıyla okutun; şifre yazmadan <b>${esc(p.ssid)}</b> ağına katılır.</p><div class="qr-box">${p.svg}</div><div class="x-form-foot"><button class="btn small" type="button" data-qr-print>Yazdır</button><button class="btn small" type="button" data-qr-reset>Değiştir</button></div>`
+      : `<form id="qr-form" class="x-form"><div class="field-wrap"><label>Ağ adı</label><input class="field" name="ssid" value="${esc(p.ssid)}" maxlength="32"></div>
+        ${p.open ? '<p class="field-hint">Bu ağ şifresiz.</p>' : '<div class="field-wrap"><label>Wi-Fi şifresi</label><input class="field" name="password" type="password" minlength="8" maxlength="63" autocomplete="off" required></div><p class="field-hint">Huawei şifreyi geri vermediği için bir kez yazmanız gerekir; şifre kaydedilmez, yalnız QR’a dönüştürülür.</p>'}
+        <div class="form-error" id="qr-error"></div><div class="x-form-foot"><button class="btn primary" type="submit">QR oluştur</button></div></form>`;
+    return { icon: 'qr', eyebrow: 'Wi-Fi paylaş', title: p.ssid || 'Wi-Fi', sub: p.bandLabel || '', body };
+  }
+
   function wanList() {
     return state.wanConfig?.wans || [];
   }
@@ -1370,6 +1597,9 @@
     else if (state.page === '/integrations') c.innerHTML = integrationsPage();
     else if (state.page === '/more') c.innerHTML = morePage();
     else if (state.page === '/scanner') c.innerHTML = scannerPage();
+    else if (state.page === '/lan') c.innerHTML = lanPage();
+    else if (state.page === '/ports') c.innerHTML = portsPage();
+    else if (state.page === '/vpn') c.innerHTML = vpnPage();
     else {
       state.page = '/';
       c.innerHTML = state.overview ? home() : '';
@@ -1385,6 +1615,8 @@
       c.querySelector('.page-head')?.insertAdjacentHTML('afterend', newDevicesCard());
     }
     syncGlobalBand();
+    c.insertAdjacentHTML('afterbegin', lanPendingBanner());
+    if (state.xPanel) drawXPanel();
     if (state.page === '/integrations' && state.integDrawer) drawIntegDrawer();
     else state.integDrawer = null;
     if (state.page.startsWith('/devices/')) {
@@ -1778,6 +2010,7 @@
       state.drawerWifi = null;
       state.drawerWan = null;
       state.integDrawer = null;
+      state.xPanel = null;
       if (state.page.startsWith('/devices/')) {
         history.replaceState({}, '', '#/devices');
         state.page = '/devices';
@@ -2881,6 +3114,256 @@
     b.innerHTML = icon(show ? 'eyeOff' : 'eye');
     b.title = b.ariaLabel = show ? 'Şifreyi gizle' : 'Şifreyi göster';
   });
+  // ── Ağ özellikleri: olaylar ──
+  const reloadX = (key, page) => {
+    state[key] = null;
+    state[key + 'Error'] = '';
+    if (state.page === page) render();
+  };
+  root.addEventListener('click', async (e) => {
+    let b = e.target.closest(
+      '[data-pkg],[data-pf-new],[data-pf-edit],[data-pf-del],[data-pf-preset],[data-pf-proto],[data-lan-confirm],[data-lan-revert],[data-vpn-add],[data-vpn-del],[data-copy-conf],[data-dl-conf],[data-wifi-qr],[data-qr-print],[data-qr-reset]',
+    );
+    if (!b) return;
+    let d = b.dataset;
+    if (d.pkg) {
+      try {
+        await NP.installPkg(d.pkg);
+        state.pkgRun = { ...state.pkgRun, [d.pkg]: { running: true } };
+        render();
+        pollPkg(d.pkg, () => {
+          state.xPf = state.xVpn = null;
+          render();
+        });
+      } catch (x) {
+        toast(x.message);
+      }
+      return;
+    }
+    if (b.matches('[data-pf-new]')) return openXPanel({ kind: 'pf' });
+    if (d.pfEdit) return openXPanel({ kind: 'pf', rule: state.xPf?.rules.find((r) => r.id === d.pfEdit) });
+    if (d.pfDel) {
+      let r = state.xPf?.rules.find((x) => x.id === d.pfDel);
+      if (!confirm(`"${r?.name || d.pfDel}" kuralı silinsin mi?`)) return;
+      try {
+        await NP.deletePortForward(d.pfDel);
+        toast('Kural silindi');
+      } catch (x) {
+        toast(x.message);
+      }
+      return reloadX('xPf', '/ports');
+    }
+    if (d.pfPreset) {
+      let [n, pr, port] = d.pfPreset.split('|'),
+        f = document.getElementById('pf-form');
+      if (!f.elements.name.value) f.elements.name.value = n;
+      f.elements.extPort.value = port;
+      f.elements.proto.value = pr;
+      f.querySelectorAll('[data-pf-proto]').forEach((x) => x.classList.toggle('active', x.dataset.pfProto === pr));
+      return;
+    }
+    if (d.pfProto) {
+      let f = document.getElementById('pf-form');
+      f.elements.proto.value = d.pfProto;
+      f.querySelectorAll('[data-pf-proto]').forEach((x) => x.classList.toggle('active', x === b));
+      return;
+    }
+    if (b.matches('[data-lan-confirm],[data-lan-revert]')) {
+      let ok = b.matches('[data-lan-confirm]');
+      try {
+        await (ok ? NP.confirmLan() : NP.revertLan());
+        state.lanPending = null;
+        toast(ok ? 'Yeni adres onaylandı' : 'Eski ayara dönülüyor…');
+        if (!ok && state.lanPrevIp) return setTimeout(() => (location.href = `http://${state.lanPrevIp}/netos/`), 2500);
+      } catch (x) {
+        toast(x.message);
+      }
+      state.xLan = null;
+      return render();
+    }
+    if (b.matches('[data-vpn-add]')) return openXPanel({ kind: 'peer' });
+    if (d.vpnDel) {
+      let p = state.xVpn?.peers.find((x) => x.id === d.vpnDel);
+      if (!confirm(`"${p?.name || ''}" VPN cihazı silinsin mi? Bu cihaz artık bağlanamaz.`)) return;
+      try {
+        await NP.deleteVpnPeer(d.vpnDel);
+        toast('Cihaz silindi');
+      } catch (x) {
+        toast(x.message);
+      }
+      return reloadX('xVpn', '/vpn');
+    }
+    if (b.matches('[data-copy-conf]')) return toast((await copyText(state.xPanel?.result?.config || '')) ? 'Yapılandırma kopyalandı' : 'Kopyalanamadı');
+    if (b.matches('[data-dl-conf]')) {
+      let p = state.xPanel,
+        url = URL.createObjectURL(new Blob([p.result.config], { type: 'text/plain' })),
+        a = document.createElement('a');
+      a.href = url;
+      a.download = `netos-${(p.name || 'vpn').replace(/[^\w-]+/g, '-').slice(0, 20)}.conf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      return;
+    }
+    if (d.wifiQr) {
+      let bnd = state.hwWifi?.bands?.find((x) => x.band === d.wifiQr);
+      return openXPanel({ kind: 'qr', ssid: bnd?.ssid || '', open: !!bnd?.open, bandLabel: bnd?.bandLabel || '' });
+    }
+    if (b.matches('[data-qr-reset]')) return openXPanel({ ...state.xPanel, svg: null });
+    if (b.matches('[data-qr-print]')) {
+      let p = state.xPanel,
+        w = window.open('', '_blank', 'width=480,height=640');
+      if (!w) return toast('Açılır pencere engellendi');
+      w.document.write(`<!doctype html><meta charset="utf-8"><title>Wi-Fi</title><body style="font-family:system-ui;text-align:center;padding:24px"><h2>Wi-Fi: ${esc(p.ssid)}</h2><div style="width:300px;margin:auto">${p.svg}</div><p>Telefon kamerasıyla okutun</p><script>onload=()=>print()<\/script>`);
+      w.document.close();
+    }
+  });
+  root.addEventListener('change', async (e) => {
+    let t = e.target;
+    if (t.matches('[data-pf-toggle]')) {
+      let r = state.xPf?.rules.find((x) => x.id === t.dataset.pfToggle);
+      try {
+        await NP.savePortForward({ ...r, enabled: t.checked });
+        toast(t.checked ? 'Kural açıldı' : 'Kural kapatıldı');
+      } catch (x) {
+        t.checked = !t.checked;
+        toast(x.message);
+      }
+      return reloadX('xPf', '/ports');
+    }
+    if (t.matches('[data-upnp]')) {
+      try {
+        await NP.setUpnp(t.checked);
+        toast(t.checked ? 'UPnP açıldı' : 'UPnP kapatıldı');
+      } catch (x) {
+        t.checked = !t.checked;
+        toast(x.message);
+      }
+      return reloadX('xPf', '/ports');
+    }
+    if (t.matches('[data-vpn-enable]')) {
+      try {
+        await NP.setVpn({ enabled: t.checked });
+        toast(t.checked ? 'VPN açıldı' : 'VPN kapatıldı');
+      } catch (x) {
+        t.checked = !t.checked;
+        toast(x.message);
+      }
+      return reloadX('xVpn', '/vpn');
+    }
+    if (t.closest('#pf-form') && t.name === 'dev') {
+      let f = t.form;
+      document.getElementById('pf-ip-wrap').hidden = !!t.value;
+      if (t.value) f.elements.ip.value = t.value;
+      document.getElementById('pf-static-hint').hidden = !state.clients.find((c) => c.ip === t.value && !c.static);
+      return;
+    }
+    if (t.closest('#lan-form') && t.name === 'dnsPreset') {
+      state.lanDns = t.value;
+      document.querySelectorAll('.dns-opt').forEach((x) => x.classList.toggle('on', x.contains(t)));
+      document.getElementById('dns-custom').hidden = t.value !== 'custom';
+      return;
+    }
+    if (t.closest('#peer-form') && t.name === 'full') t.form.querySelectorAll('.dns-opt').forEach((x) => x.classList.toggle('on', x.contains(t)));
+  });
+  root.addEventListener('input', (e) => {
+    let f = e.target.closest('#lan-form');
+    if (f && (e.target.name === 'start' || e.target.name === 'limit' || e.target.name === 'ip')) {
+      let pre = f.elements.ip.value.replace(/\.\d*$/, '.'),
+        s = +f.elements.start.value,
+        n = +f.elements.limit.value;
+      let h = document.getElementById('lan-range');
+      if (h) h.innerHTML = `Dağıtılan adresler: <b class="num">${esc(pre + s)} – ${esc(pre + (s + n - 1))}</b>${s + n - 1 > 254 ? ' <span class="warn-text">(254’ü aşamaz)</span>' : ''}`;
+      document.querySelectorAll('.ip-suffix .num').forEach((x) => (x.textContent = pre));
+    }
+  });
+  root.addEventListener('submit', async (e) => {
+    let f = e.target,
+      id = f.id;
+    if (!['pf-form', 'lan-form', 'vpn-setup', 'vpn-ep', 'peer-form', 'qr-form'].includes(id)) return;
+    e.preventDefault();
+    let btn = f.querySelector('[type=submit]'),
+      el = f.elements,
+      err = (m) => {
+        let x = f.querySelector('.form-error');
+        if (x) x.textContent = m || '';
+        else if (m) toast(m);
+      };
+    err('');
+    let done = btn ? xBusy(btn, 'Kaydediliyor…') : () => {};
+    try {
+      if (id === 'pf-form') {
+        let ip = el.dev.value || el.ip.value.trim();
+        if (!NP.validate.ip(ip)) throw new Error('Geçerli bir hedef IP girin');
+        await NP.savePortForward({ id: f.dataset.id, name: el.name.value.trim(), proto: el.proto.value, extPort: el.extPort.value.trim(), intPort: el.intPort.value.trim(), ip });
+        state.xPanel = null;
+        document.getElementById('drawer-host').replaceChildren();
+        toast('Kural kaydedildi');
+        return reloadX('xPf', '/ports');
+      }
+      if (id === 'lan-form') {
+        let l = state.xLan,
+          ip = el.ip.value.trim(),
+          preset = el.dnsPreset.value,
+          dns = preset === 'custom' ? el.dnsCustom.value.split(/[\s,]+/).filter(Boolean) : DNS_PRESETS.find((x) => x[0] === preset)[2];
+        if (!NP.validate.ip(ip)) throw new Error('Geçerli bir IP adresi girin');
+        if (dns.some((x) => !NP.validate.ip(x))) throw new Error('DNS adresleri geçersiz');
+        let changed = ip !== l.ip;
+        if (changed && !confirm(`Router adresi ${l.ip} → ${ip} olacak.\n\n1) Kaydedince bu sayfa bağlantıyı kaybeder.\n2) Bilgisayarınızın Wi-Fi’sini/kablosunu kapatıp açın.\n3) http://${ip}/netos/ adresinden girip ONAYLAYIN.\n\n3 dakika içinde onaylanmazsa eski ayara döner. Devam edilsin mi?`)) return done();
+        if (!el.dhcpEnabled.checked && !confirm('DHCP kapatılınca yeni bağlanan cihazlar IP alamaz. Emin misiniz?')) return done();
+        let r = await NP.setLan({ ip, dhcpEnabled: el.dhcpEnabled.checked, start: el.start.value, limit: el.limit.value, leasetime: el.leasetime.value, dns });
+        state.lanDns = null;
+        if (r.ipChanged) {
+          state.lanPrevIp = l.ip;
+          document.getElementById('content').innerHTML = `<section class="card lan-moving">${cardHead('router', 'Router adresi değişiyor')}<p>Yeni adres: <b class="num">${esc(r.newIp)}</b>${r.moved ? ` · ${r.moved} kayıt yeni ağa taşındı` : ''}</p><ol class="x-steps"><li>Bilgisayarınızın/telefonunuzun Wi-Fi’sini kapatıp açın (kabloluysa kabloyu çıkarıp takın).</li><li>Yeni adresi açın: <a href="http://${esc(r.newIp)}/netos/">http://${esc(r.newIp)}/netos/</a></li><li>Giriş yapın ve üstteki <b>Onayla</b> düğmesine basın.</li></ol><p class="field-hint">3 dakika içinde onaylanmazsa router eski adrese (${esc(l.ip)}) döner.</p></section>`;
+          return;
+        }
+        toast('Yerel ağ ayarları kaydedildi');
+        return reloadX('xLan', '/lan');
+      }
+      if (id === 'vpn-setup') {
+        await NP.setupVpn({ port: el.port.value, endpoint: el.endpoint.value.trim() });
+        toast('VPN sunucusu kuruldu');
+        return setTimeout(() => reloadX('xVpn', '/vpn'), 1500);
+      }
+      if (id === 'vpn-ep') {
+        await NP.setVpn({ enabled: state.xVpn.enabled, endpoint: el.endpoint.value.trim() });
+        toast('Dış adres kaydedildi');
+        return reloadX('xVpn', '/vpn');
+      }
+      if (id === 'peer-form') {
+        let name = el.name.value.trim();
+        let r = await NP.addVpnPeer(name, el.full.value === '1');
+        state.xVpn = null;
+        openXPanel({ kind: 'peer', name, result: r });
+        if (state.page === '/vpn') loadX('xVpn', () => NP.getVpn(), '/vpn');
+        return;
+      }
+      if (id === 'qr-form') {
+        let ssid = el.ssid.value.trim(),
+          pw = el.password?.value || '';
+        if (!ssid) throw new Error('Ağ adı boş olamaz');
+        if (!state.xPanel.open && pw.length < 8) throw new Error('Wi-Fi şifresi en az 8 karakter');
+        let svg = await NP.qrSvg(NP.wifiQrText(ssid, pw, state.xPanel.open));
+        return openXPanel({ ...state.xPanel, ssid, svg });
+      }
+    } catch (x) {
+      err(x.message);
+    }
+    done();
+  });
+  // LAN onay geri sayımı
+  setInterval(() => {
+    let p = state.lanPending,
+      el = document.getElementById('lan-left');
+    if (!p) return;
+    if (Date.now() > p.until) {
+      state.lanPending = null;
+      return render();
+    }
+    if (el) el.textContent = Math.max(0, Math.round((p.until - Date.now()) / 1000));
+  }, 1000);
   // Sistem sayfası birkaç saniyede bir yenilenir; kullanıcı bir alana yazıyorsa yazdığını silme
   function formBusy() {
     let a = document.activeElement,

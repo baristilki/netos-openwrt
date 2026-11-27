@@ -22,7 +22,11 @@
 					"integ_get",
 					"scan_status",
 					"update_check",
-					"update_status"
+					"update_status",
+					"pf_list",
+					"lan_get",
+					"wg_status",
+					"pkg_status"
 				],
 				"system": [
 					"board",
@@ -59,7 +63,8 @@
 				"netpanel",
 				"firewall",
 				"mwan3",
-				"sqm"
+				"sqm",
+				"upnpd"
 			]
 		},
 		"write": {
@@ -98,7 +103,19 @@
 					"scan_start",
 					"scan_wol",
 					"update_apply",
-					"update_set"
+					"update_set",
+					"pf_set",
+					"pf_delete",
+					"upnp_set",
+					"lan_set",
+					"lan_confirm",
+					"lan_revert",
+					"wg_setup",
+					"wg_set",
+					"wg_add",
+					"wg_delete",
+					"qr",
+					"pkg_install"
 				],
 				"system": [
 					"reboot"

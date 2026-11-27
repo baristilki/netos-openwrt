@@ -942,6 +942,68 @@
   }
   async function cfUnpublish(apiToken, hostname) { return npCall('cf_unpublish', { api_token: apiToken, hostname }); }
 
+  /* ── Port yönlendirme + UPnP ───────────────────────────────────────────── */
+  const WAN_KIND = {
+    public: 'Gerçek (public) IP — dışarıdan erişilebilir',
+    cgnat: 'Operatör NAT’ı (CGNAT) — dışarıdan gelen bağlantılar bu hatta ulaşmaz',
+    private: 'Başka bir modemin arkasında — o modemde de port açılması gerekir',
+  };
+  const mapWans = (w) => (w || []).map((x) => ({ name: x.name, ip: x.ip, kind: x.kind, kindLabel: WAN_KIND[x.kind] || x.kind }));
+  // -> { rules:[{id,name,proto,extPort,ip,intPort,enabled}], upnp:{installed,enabled,running,leases:[{proto,extPort,ip,intPort,desc}]}, wans, lan:{ip,prefix} }
+  async function getPortForwards() {
+    const r = await npCall('pf_list', {});
+    return {
+      rules: (r.rules || []).map((x) => ({ id: x.id, name: x.name, proto: x.proto, extPort: x.ext_port, ip: x.ip, intPort: x.int_port, enabled: !!x.enabled })),
+      upnp: { ...(r.upnp || {}), leases: (r.upnp?.leases || []).map((l) => ({ proto: l.proto, extPort: l.ext_port, ip: l.ip, intPort: l.int_port, desc: l.desc })) },
+      wans: mapWans(r.wans), lan: r.lan || {},
+    };
+  }
+  // rule: { id?, name, proto: 'tcp'|'udp'|'tcp udp', extPort, intPort, ip, enabled }
+  async function savePortForward(x) {
+    return npCall('pf_set', { id: x.id || '', name: x.name || '', proto: x.proto || 'tcp udp', ext_port: String(x.extPort || ''), int_port: String(x.intPort || ''), ip: x.ip, enabled: x.enabled !== false });
+  }
+  async function deletePortForward(id) { await npCall('pf_delete', { id }); }
+  async function setUpnp(enabled) { await npCall('upnp_set', { enabled: !!enabled }); }
+
+  /* ── Yerel ağ + DHCP ───────────────────────────────────────────────────── */
+  // -> { ip, prefix, dhcp:{enabled,start,limit,leasetime}, dns:[], staticHosts, pending:{until(ms), oldIp, newIp}|null }
+  async function getLan() {
+    const r = await npCall('lan_get', {});
+    return { ip: r.ip, prefix: r.prefix, dhcp: r.dhcp, dns: r.dns || [], staticHosts: r.static_hosts || 0,
+      pending: r.pending ? { until: r.pending.until * 1000, oldIp: r.pending.old_ip, newIp: r.pending.new_ip } : null };
+  }
+  // p: { ip, dhcpEnabled, start, limit, leasetime, dns:[] } -> { ipChanged, newIp, moved, pendingUntil(ms) }
+  async function setLan(p) {
+    const r = await npCall('lan_set', { ip: p.ip, dhcp_enabled: p.dhcpEnabled !== false, start: +p.start, limit: +p.limit, leasetime: p.leasetime, dns: p.dns || [] });
+    return { ipChanged: !!r.ip_changed, newIp: r.new_ip, moved: r.moved || 0, pendingUntil: r.pending_until ? r.pending_until * 1000 : 0 };
+  }
+  async function confirmLan() { await npCall('lan_confirm', {}); }
+  async function revertLan() { await npCall('lan_revert', {}); }
+
+  /* ── WireGuard VPN ─────────────────────────────────────────────────────── */
+  async function getVpn() {
+    const r = await npCall('wg_status', {});
+    return { installed: !!r.installed, qrencode: !!r.qrencode, configured: !!r.configured, enabled: !!r.enabled, up: !!r.up, port: r.port, subnet: r.subnet,
+      endpoint: r.endpoint || '', wans: mapWans(r.wans),
+      peers: (r.peers || []).map((p) => ({ ...p, handshake: (p.handshake || 0) * 1000, online: !!p.handshake && Date.now() / 1000 - p.handshake < 180 })) };
+  }
+  async function setupVpn(o) { await npCall('wg_setup', { port: +o.port || 51820, endpoint: o.endpoint || '' }); }
+  async function setVpn(o) { await npCall('wg_set', { enabled: !!o.enabled, endpoint: o.endpoint ?? null }); }
+  // -> { id, ip, config (metin), qr (SVG|null) } — istemci anahtarı yalnız bu yanıtta görünür
+  async function addVpnPeer(name, fullTunnel = true) { return npCall('wg_add', { name, full_tunnel: !!fullTunnel }); }
+  async function deleteVpnPeer(id) { await npCall('wg_delete', { id }); }
+
+  /* ── QR + paket kurulumu ───────────────────────────────────────────────── */
+  async function qrSvg(text) { return (await npCall('qr', { text })).svg; }
+  // Wi-Fi QR metni (telefon kamerasıyla okutunca ağa katılır)
+  function wifiQrText(ssid, password, open = false) {
+    const e = (v) => String(v).replace(/([\\;,:"])/g, '\\$1');
+    return `WIFI:T:${open ? 'nopass' : 'WPA'};S:${e(ssid)};${open ? '' : `P:${e(password)};`};`;
+  }
+  // set: 'upnp' | 'wireguard' | 'qr' | 'wol'
+  async function installPkg(set) { return npCall('pkg_install', { set }); }
+  async function pkgStatus(set) { return npCall('pkg_status', { set }); }
+
   /* ── Güncelleme (GitHub Releases) ───────────────────────────────────────── */
   // -> { current, latest, available, notes, published, url, repo, auto, checked(ms), error }
   async function getUpdate(force = false) {
@@ -1355,6 +1417,15 @@
     const demoInteg = { cloudflare: true, scanner: false };
     let demoScan = null;
     const demoUpd = { current: '1.2.0', auto: false, t0: 0 };
+    const demoWans = [{ name: 'Turknet', ip: '100.66.93.98', kind: 'cgnat' }, { name: 'wan2', ip: '192.168.2.212', kind: 'private' }];
+    const demoPf = { n: 2, rules: [{ id: 'cfg01', name: 'Kamera', proto: 'tcp', ext_port: '8443', ip: '192.168.1.139', int_port: '443', enabled: true }] };
+    const demoPkg = { upnp: false, wireguard: false, qr: true, wol: true, t: {} };
+    const demoUpnp = { enabled: false };
+    const demoLan = { ip: '192.168.1.1', prefix: 24, dhcp: { enabled: true, start: 100, limit: 150, leasetime: '12h' }, dns: [], pending: null };
+    const demoVpn = { configured: false, enabled: true, port: 51820, endpoint: '', n: 1, peers: [] };
+    const demoQr = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 29 29" shape-rendering="crispEdges"><rect width="29" height="29" fill="#fff"/>' +
+      Array.from({ length: 29 * 29 }, (_, i) => { const x = i % 29, y = (i / 29) | 0, f = (a, b) => x >= a && x < a + 7 && y >= b && y < b + 7, r = (a, b) => f(a, b) && !(x > a && x < a + 6 && y > b && y < b + 6 && !(x > a + 1 && x < a + 5 && y > b + 1 && y < b + 5));
+        return r(1, 1) || r(21, 1) || r(1, 21) || (!f(0, 0) && !f(20, 0) && !f(0, 20) && x > 0 && y > 0 && x < 28 && y < 28 && ((x * 7 + y * 13 + x * y) % 5 < 2)) ? `<rect x="${x}" y="${y}" width="1" height="1"/>` : ''; }).join('') + '</svg>';
     const demoCf = { installed: true, enabled: true, token_set: true, token_valid: true, tunnel_id: 'a1b2c3d4-1111-2222-3333-444455556666',
       running: true, connections: 4, hosts: [{ hostname: 'ha.ornek.com', service: 'http://192.168.1.199:8123' }], curl: true };
     const hwCfg = { dbho: false, bands: [
@@ -1576,6 +1647,50 @@
         demoScan = { t0: Date.now(), ports: a.ports !== false, range: a.range || '' }; return { ok: true };
       },
       'netpanel.scan_wol': () => ({ ok: true }),
+      'netpanel.pf_list': () => ({ rules: JSON.parse(JSON.stringify(demoPf.rules)), upnp: { installed: demoPkg.upnp, enabled: demoUpnp.enabled, running: demoUpnp.enabled,
+        leases: demoUpnp.enabled ? [{ proto: 'udp', ext_port: '3074', ip: '192.168.1.106', int_port: '3074', desc: 'Xbox Live' }, { proto: 'tcp', ext_port: '51413', ip: '192.168.1.120', int_port: '51413', desc: 'qBittorrent' }] : [] },
+        wans: demoWans, lan: { ip: demoLan.ip, prefix: 24 } }),
+      'netpanel.pf_set': (a) => {
+        if (!/^\d{1,5}(-\d{1,5})?$/.test(a.ext_port)) return { ok: false, error: 'Dış port 1-65535 arasında olmalı (aralık için 5000-5010)' };
+        if (!/^192\.168\.1\.\d+$/.test(a.ip) || a.ip === '192.168.1.1') return { ok: false, error: 'Hedef IP yerel ağda olmalı (192.168.1.1/24)' };
+        const clash = demoPf.rules.find((r) => r.id !== a.id && r.enabled && r.ext_port === a.ext_port);
+        if (clash) return { ok: false, error: `Dış port ${a.ext_port} zaten "${clash.name}" kuralında kullanılıyor` };
+        const rule = { id: a.id || 'cfg0' + demoPf.n++, name: a.name || `NetOS ${a.ip}:${a.int_port || a.ext_port}`, proto: a.proto, ext_port: a.ext_port, ip: a.ip, int_port: a.int_port || a.ext_port, enabled: a.enabled !== false };
+        const i = demoPf.rules.findIndex((r) => r.id === a.id);
+        if (i >= 0) demoPf.rules[i] = rule; else demoPf.rules.push(rule);
+        return { ok: true, id: rule.id };
+      },
+      'netpanel.pf_delete': (a) => { demoPf.rules = demoPf.rules.filter((r) => r.id !== a.id); return { ok: true }; },
+      'netpanel.upnp_set': (a) => { demoUpnp.enabled = !!a.enabled; return { ok: true }; },
+      'netpanel.lan_get': () => ({ ip: demoLan.ip, prefix: 24, dhcp: { ...demoLan.dhcp }, dns: demoLan.dns.slice(), static_hosts: 3,
+        pending: demoLan.pending && Date.now() < demoLan.pending.until * 1000 ? demoLan.pending : null }),
+      'netpanel.lan_set': (a) => {
+        if (a.start + a.limit - 1 > 254) return { ok: false, error: 'DHCP aralığı .2 ile .254 arasında kalmalı' };
+        const changed = a.ip !== demoLan.ip;
+        if (changed) demoLan.pending = { until: Math.floor(Date.now() / 1000) + 120, old_ip: demoLan.ip, new_ip: a.ip };
+        demoLan.ip = a.ip; demoLan.dhcp = { enabled: a.dhcp_enabled, start: a.start, limit: a.limit, leasetime: a.leasetime }; demoLan.dns = a.dns;
+        return { ok: true, ip_changed: changed, new_ip: a.ip, moved: changed ? 4 : 0, pending_until: changed ? demoLan.pending.until : null };
+      },
+      'netpanel.lan_confirm': () => { demoLan.pending = null; return { ok: true }; },
+      'netpanel.lan_revert': () => { if (demoLan.pending) demoLan.ip = demoLan.pending.old_ip; demoLan.pending = null; return { ok: true }; },
+      'netpanel.wg_status': () => ({ installed: demoPkg.wireguard, qrencode: true, configured: demoVpn.configured, enabled: demoVpn.enabled, up: demoVpn.configured && demoVpn.enabled,
+        port: demoVpn.port, subnet: '10.99.0.1/24', endpoint: demoVpn.endpoint, wans: demoWans, peers: JSON.parse(JSON.stringify(demoVpn.peers)) }),
+      'netpanel.wg_setup': (a) => { if (!demoPkg.wireguard) return { ok: false, error: 'WireGuard paketi kurulu değil' }; demoVpn.configured = true; demoVpn.port = a.port; demoVpn.endpoint = a.endpoint; return { ok: true }; },
+      'netpanel.wg_set': (a) => { demoVpn.enabled = !!a.enabled; if (a.endpoint != null) demoVpn.endpoint = a.endpoint; return { ok: true }; },
+      'netpanel.wg_add': (a) => {
+        const ip = '10.99.0.' + ++demoVpn.n, id = 'wgp' + demoVpn.n;
+        demoVpn.peers.push({ id, name: a.name, ip, handshake: demoVpn.n === 2 ? Math.floor(Date.now() / 1000) - 40 : 0, rx: 1843200, tx: 9437184, endpoint: '' });
+        const conf = `[Interface]\nPrivateKey = DEMO-istemci-anahtari-yalnizca-ornek=\nAddress = ${ip}/32\nDNS = 192.168.1.1\n\n[Peer]\nPublicKey = DEMO-sunucu-anahtari=\nPresharedKey = DEMO-psk=\nEndpoint = ${demoVpn.endpoint || 'ev.ornek.com'}:${demoVpn.port}\nAllowedIPs = ${a.full_tunnel ? '0.0.0.0/0' : '10.99.0.0/24, 192.168.1.0/24'}\nPersistentKeepalive = 25\n`;
+        return { ok: true, id, ip, config: conf, qr: demoQr };
+      },
+      'netpanel.wg_delete': (a) => { demoVpn.peers = demoVpn.peers.filter((p) => p.id !== a.id); return { ok: true }; },
+      'netpanel.qr': () => ({ ok: true, svg: demoQr }),
+      'netpanel.pkg_install': (a) => { demoPkg.t[a.set] = Date.now(); return { ok: true, running: true }; },
+      'netpanel.pkg_status': (a) => {
+        const t = demoPkg.t[a.set];
+        if (t && Date.now() - t > 3000) { demoPkg[a.set] = true; delete demoPkg.t[a.set]; }
+        return { installed: !!demoPkg[a.set], running: !!demoPkg.t[a.set], failed: false, log: demoPkg.t[a.set] ? 'Installing…' : '' };
+      },
       'netpanel.update_check': () => ({ current: demoUpd.current, latest: '1.3.0', available: demoUpd.current !== '1.3.0', notes: '- Ağ tarayıcıya özel IP aralığı\n- Wake-on-LAN\n- Hata düzeltmeleri', published: '2026-11-27T09:00:00Z', url: 'https://github.com/baristilki/netos-openwrt/releases/tag/v1.3.0', repo: 'baristilki/netos-openwrt', auto: demoUpd.auto, checked: Math.floor(Date.now() / 1000), error: '' }),
       'netpanel.update_apply': () => { demoUpd.t0 = Date.now(); return { ok: true }; },
       'netpanel.update_status': () => {
@@ -1681,6 +1796,8 @@
     getWanConfig, setWan, setWanMode, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
     getUsage, getPingHistory, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
+    getPortForwards, savePortForward, deletePortForward, setUpnp, getLan, setLan, confirmLan, revertLan,
+    getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,
     getIntegrations, setIntegration, startScan, getScan, wakeOnLan, getUpdate, applyUpdate, getUpdateStatus, setAutoUpdate, TYPE_LABELS: TYPES,
     getSqm, setSqm, deleteSqm, setOffload, startSpeedtest, getSpeedtest, SQM_PRESETS, GRADE_TEXT, SPEED_SERVERS,
     TYPES,

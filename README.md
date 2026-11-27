@@ -16,6 +16,10 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 - Ebeveyn kontrolü: cihaz başına gün/saat planı (ör. hafta içi 23:00–07:00 internet kapalı)
 - Yeni cihaz uyarısı (+ isteğe bağlı otomatik engel), Telegram bildirimi (hat koptu/geldi, yeni cihaz)
 - Saat dilimi seçimi, ayar yedeği indir / geri yükle
+- Port yönlendirme (hazır şablonlar, çakışma kontrolü) + UPnP; CGNAT / başka modem arkası uyarısı
+- Yerel ağ: router IP'si, DHCP aralığı, kira süresi, cihazlara verilen DNS (IP değişiminde 3 dk geri alma)
+- WireGuard VPN sunucusu: cihaz ekle → QR kodu telefona okut
+- Wi-Fi'yi QR kod ile paylaşma
 - Cloudflare Tunnel: token yapıştırarak ya da API token ile otomatik kurulum
   (tünel + DNS + Cloudflare Access e-posta koruması). API token router'a kaydedilmez.
 

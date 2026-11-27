@@ -43,11 +43,13 @@ grep -qF "/usr/libexec/netpanel/update.sh" /etc/crontabs/root ||
 # yeni cihaz bildirimi: şu an ağda olan cihazları "bilinen" say (kurulumda bildirim yağmasın)
 /usr/libexec/netpanel/collect.sh seed
 
-# curl + openssl (Huawei, güncelleme, ağ tarayıcı), etherwake (Wake-on-LAN)
+# curl + openssl (Huawei, güncelleme, ağ tarayıcı), etherwake (Wake-on-LAN), qrencode (QR)
+# UPnP ve WireGuard paketleri panelden etkinleştirilince kurulur.
 NEED=""
 command -v curl >/dev/null || NEED="$NEED curl"
 command -v openssl >/dev/null || NEED="$NEED openssl-util"
 command -v etherwake >/dev/null || NEED="$NEED etherwake"
+command -v qrencode >/dev/null || NEED="$NEED qrencode"   # Wi-Fi / VPN QR kodları
 if [ -n "$NEED" ]; then
 	echo "  paketler kuruluyor:$NEED"
 	if command -v apk >/dev/null; then
