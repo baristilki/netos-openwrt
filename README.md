@@ -6,30 +6,58 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 (LuCI `http://<router-ip>/cgi-bin/luci/` adresinde çalışmaya devam eder.)
 
 ## Özellikler
-- Ana sayfa: internet durumu + canlı hız grafiği, tüm Wi-Fi ağları (aç/kapa, SSID/şifre),
-  ev/misafir ağları, çevrimiçi cihazlar, sistem durumu
-- Cihazlar: çevrimiçi/çevrimdışı, Wi-Fi sinyali, canlı ↓/↑ hız, isim verme
-- Sabit IP ataması (dnsmasq static lease)
-- Cihaz başına indirme/yükleme hız sınırı (nftables)
-- Cihaz başına internet engeli
-- İstatistik: cihaz/hat başına günlük trafik (30-100 gün), ping ve paket kaybı geçmişi (dakikalık, cron)
-- Ebeveyn kontrolü: cihaz başına gün/saat planı (ör. hafta içi 23:00–07:00 internet kapalı)
-- Yeni cihaz uyarısı (+ isteğe bağlı otomatik engel), Telegram bildirimi (hat koptu/geldi, yeni cihaz)
-- Saat dilimi seçimi, ayar yedeği indir / geri yükle
-- Port yönlendirme (hazır şablonlar, çakışma kontrolü) + UPnP; CGNAT / başka modem arkası uyarısı
-- Güvenlik duvarı: DMZ, internetten gelen ping'e yanıt; cihaz başına anlık bağlantılar
-- Yerel ağ: router IP'si, DHCP aralığı, kira süresi, cihazlara verilen DNS (IP değişiminde 3 dk geri alma)
-- WireGuard VPN sunucusu: cihaz ekle → QR kodu telefona okut
-- Wi-Fi'yi QR kod ile paylaşma
-- Cihaz eve geldi / ayrıldı bildirimi (Telegram), günlük zamanlanmış hız testi
-- İlk kurulum sihirbazı (şifresiz router'ı algılar; tek ya da iki internet hattı seçimi), HTTPS, otomatik oturum kapatma
-- Portlar: kablo takılı mı, bağlantı hızı (1 / 2.5 Gbit…), canlı trafik, düşük hız / half duplex uyarısı
-- İkinci internet hattı ekleme (boş port + DHCP/PPPoE, yedek hat ya da birlikte kullanım, mwan3)
-- Giriş deneme sınırı (NetOS/LuCI/SSH: 5 hatada 5-15-60 dk kilit), isteğe bağlı sıkı mod
-- Türkçe / English arayüz (üst bardan değiştirilir)
-- Sistem günlüğü görüntüleyici, sıcaklık/disk/bellek uyarıları, zamanlı yeniden başlatma
-- Cloudflare Tunnel: token yapıştırarak ya da API token ile otomatik kurulum
-  (tünel + DNS + Cloudflare Access e-posta koruması). API token router'a kaydedilmez.
+
+### Genel bakış
+- Ana sayfa: internet durumu ve canlı hız grafiği, tüm Wi-Fi ağları (aç/kapa), ev ve misafir ağları,
+  fiziksel portlar, çevrimiçi cihazlar, sistem durumu
+- Bildirim zili: şifresiz router, kopan hat, yeni cihaz, düşük port hızı, flow offloading gibi uyarılar
+  tek yerde; uyarılar sayfanın üstünde yalnız bir kez çıkar
+- İlk kurulum sihirbazı: router şifresi, saat dilimi, tek ya da iki internet hattı, otomatik güncelleme
+- Türkçe / English arayüz, gece / gündüz modu, telefona uygun düzen
+
+### İnternet
+- PPPoE / DHCP / statik IP, VLAN, MTU, DNS ayarları; değişiklik onaylanmazsa 2 dk içinde otomatik geri alma
+- Çoklu hat (mwan3): ikinci hattı ekleme, yedek hat ya da yük dengeleme, hat başına durum ve ping
+- Bağlantı geçmişi (hat koptu / geldi) ve 30 günlük **kesinti raporu** (sayı, toplam ve en uzun süre,
+  erişilebilirlik yüzdesi; operatöre şikâyet için kopyalanabilir)
+- Hız testi (hat seçerek), günlük zamanlanmış hız testi, ping ve paket kaybı geçmişi
+- SQM (bufferbloat önleme) ve oyun önceliği, önerilen değerleri tek tıkla uygulama
+
+### Cihazlar
+- Çevrimiçi / çevrimdışı, Wi-Fi sinyali, canlı ↓/↑ hız, isim ve tür verme
+- Sabit IP ataması, cihaz başına hız sınırı, internet engeli, öncelik
+- Ebeveyn kontrolü: cihaz başına gün/saat planı (ör. hafta içi 23:00–07:00 internet kapalı);
+  AdGuard ile cihaz başına yetişkin içerik filtresi, güvenli arama, YouTube/TikTok gibi servis engeli
+- Yeni cihaz uyarısı (isteğe bağlı otomatik engel), eve geldi / ayrıldı bildirimi
+- Cihaz başına anlık bağlantılar, günlük trafik istatistiği (30-100 gün)
+
+### Ağ ve güvenlik
+- Fiziksel portlar: kablo takılı mı, bağlantı hızı (1 / 2.5 Gbit…), kopma sayısı, canlı trafik,
+  düşük hız / half duplex uyarısı
+- Yerel ağ: router IP'si, DHCP aralığı, kira süresi, DNS (IP değişiminde 3 dk geri alma)
+- Port yönlendirme (hazır şablonlar, çakışma kontrolü), UPnP, DMZ; CGNAT / modem arkası uyarısı
+- Güvenlik duvarı: internetten gelen ping'e yanıt, flow offloading aç/kapa
+- Giriş deneme sınırı (NetOS/LuCI/SSH: 5 hatada 5-15-60 dk kilit), HTTPS, otomatik oturum kapatma
+- WireGuard VPN sunucusu (cihaz başına QR kod), Cloudflare Tunnel (port açmadan dışarıdan erişim)
+- Reklam engelleme (AdGuard Home, tek tıkla kurulum)
+- Ağ tarayıcı: IP tarama, cihaz tipi tahmini, açık port, Wake-on-LAN, CSV
+
+### Wi-Fi
+- OpenWrt Wi-Fi: aç/kapa, ağ adı, şifre; QR kod ile paylaşma
+- Huawei WiFi AX2 / WS5200: aç/kapa, ağ adı, şifre, kanal, kanal analizi
+- TP-Link Archer BE230 (deneysel)
+
+### Sistem
+- Telegram bildirimleri (hat, yeni cihaz, varlık, sistem uyarıları)
+- Sıcaklık / disk / bellek uyarıları, zamanlı yeniden başlatma, sistem günlüğü
+- Ayar yedeği indir / geri yükle, saat dilimi
+- GitHub'dan tek tıkla güncelleme, isteğe bağlı gece otomatik güncelleme
+
+### Yol haritası
+- Uygulama bazlı trafik (hangi cihaz YouTube/Netflix'e ne kadar harcadı — nlbwmon)
+- IPv6 ayarları
+- Misafir Wi-Fi yönetimi (Huawei misafir ağı: aç/kapa, şifre, süre, QR)
+- OpenWrt Wi-Fi için kanal analizi ve 802.11r (kopmadan geçiş)
 
 ## Gereksinimler
 - OpenWrt 22.03+ (fw4 / nftables). 23.05 ve 24.10 hedeflendi.
