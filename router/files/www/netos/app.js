@@ -403,7 +403,7 @@
     try {
       let r = await NP.pingHost(c.ip);
       state.pingRes[mac] = r;
-      toast(r.received ? `${c.displayName}: yanıt veriyor${r.avgMs != null ? ' (' + Math.round(r.avgMs) + ' ms)' : ''}` : `${c.displayName}: yanıt vermiyor`);
+      toast(r.received ? `${c.displayName}: yanıt veriyor${r.avgMs != null ? ' (' + fmtMs(r.avgMs) + ')' : ''}` : `${c.displayName}: yanıt vermiyor`);
     } catch (x) {
       state.pingRes[mac] = { received: 0, avgMs: null };
       toast(x.message);
@@ -500,10 +500,11 @@
     return `<span class="conn-badge">${c.conn === 'wifi' ? icon('wifi') : icon('ethernet')}${esc(c.connLabel || (c.conn === 'wifi' ? 'Wi-Fi' : 'Ethernet'))}</span>`;
   }
   // cihaz hangi erişim noktası üzerinden bağlı
+  const fmtMs = (v) => (v < 1 ? "<1 ms" : Math.round(v) + " ms");
   const viaLabel = (c) => (c.via === 'huawei' ? 'Huawei' : c.via === 'tplink' ? 'TP-Link' : 'Router');
   function rowActions(c, web) {
     let p = state.pingRes?.[c.mac];
-    return `<div class="row-actions">${p ? `<span class="ping-res ${p.busy ? '' : p.received ? 'ok' : 'bad'}">${p.busy ? '…' : p.received ? `${p.avgMs != null ? Math.round(p.avgMs) + ' ms' : 'yanıt var'}` : 'yanıt yok'}</span>` : ''}<button class="icon-btn" type="button" data-ping="${esc(c.mac)}" title="Ping at: cihaz yanıt veriyor mu?" aria-label="Ping at" ${c.ip ? '' : 'disabled'}>${icon('radar')}</button>${web.length ? `<a class="icon-btn" href="${esc(web[0])}" target="_blank" rel="noopener" title="Web arayüzünü aç" aria-label="Web arayüzünü aç" onclick="event.stopPropagation()">${icon('globe')}</a>` : '<span class="icon-btn ghost" aria-hidden="true"></span>'}</div>`;
+    return `<div class="row-actions">${p ? `<span class="ping-res ${p.busy ? '' : p.received ? 'ok' : 'bad'}">${p.busy ? '…' : p.received ? `${p.avgMs != null ? fmtMs(p.avgMs) : 'yanıt var'}` : 'yanıt yok'}</span>` : ''}<button class="icon-btn" type="button" data-ping="${esc(c.mac)}" title="Ping at: cihaz yanıt veriyor mu?" aria-label="Ping at" ${c.ip ? '' : 'disabled'}>${icon('radar')}</button>${web.length ? `<a class="icon-btn" href="${esc(web[0])}" target="_blank" rel="noopener" title="Web arayüzünü aç" aria-label="Web arayüzünü aç" onclick="event.stopPropagation()">${icon('globe')}</a>` : '<span class="icon-btn ghost" aria-hidden="true"></span>'}</div>`;
   }
   // Liste sırası sabit kalsın: çevrimiçi/çevrimdışı durumu saniyelik değişse de satırlar zıplamasın.
   // Sıra sayfaya girildiğinde ve 30 dakikada bir yeniden hesaplanır; yeni cihazlar sona eklenir.
