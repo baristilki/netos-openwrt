@@ -1,0 +1,104 @@
+{
+	"netpanel": {
+		"description": "NetOS ev ağı arayüzü",
+		"read": {
+			"ubus": {
+				"netpanel": [
+					"clients",
+					"status",
+					"hw_status",
+					"sysinfo",
+					"wan_config",
+					"wan_events",
+					"sqm_config",
+					"speedtest_status",
+					"hw_wifi_get",
+					"usage_get",
+					"ping_get",
+					"newdev_list",
+					"notify_get",
+					"tz_get",
+					"cf_status",
+					"integ_get",
+					"scan_status"
+				],
+				"system": [
+					"board",
+					"info"
+				],
+				"network.interface": [
+					"dump"
+				],
+				"network.device": [
+					"status"
+				],
+				"network.wireless": [
+					"status"
+				],
+				"iwinfo": [
+					"info",
+					"assoclist"
+				],
+				"uci": [
+					"get"
+				],
+				"session": [
+					"access",
+					"destroy"
+				],
+				"mwan3": [
+					"status"
+				]
+			},
+			"uci": [
+				"wireless",
+				"network",
+				"dhcp",
+				"netpanel",
+				"firewall",
+				"mwan3",
+				"sqm"
+			]
+		},
+		"write": {
+			"ubus": {
+				"netpanel": [
+					"set_client",
+					"forget_client",
+					"set_wifi",
+					"hw_set",
+					"hw_config",
+					"set_password",
+					"web_scan",
+					"wan_set",
+					"wan_mode",
+					"wan_confirm",
+					"wan_revert",
+					"wan_reconnect",
+					"sqm_set",
+					"sqm_delete",
+					"set_offload",
+					"speedtest_start",
+					"hw_wifi_set",
+					"hw_wifi_scan",
+					"newdev_ack",
+					"notify_set",
+					"notify_test",
+					"tz_set",
+					"backup_create",
+					"backup_restore",
+					"cf_set_token",
+					"cf_set_enabled",
+					"cf_lookup",
+					"cf_publish",
+					"cf_unpublish",
+					"integ_set",
+					"scan_start"
+				],
+				"system": [
+					"reboot"
+				]
+			}
+		}
+	}
+}

@@ -1,0 +1,460 @@
+#!/bin/sh
+# NetPanel rpcd eklentisi -> ubus nesnesi "netpanel"
+#   clients        : tüm cihazlar (lease + ARP + Wi-Fi + sabit kayıt + trafik sayaçları)
+#   status         : nft tablosu / flow offloading durumu
+#   set_client     : isim, sabit IP, hız sınırı, internet engeli
+#   forget_client  : cihaz kaydını ve sabit IP'yi sil
+#   set_wifi       : SSID / şifre / aç-kapa
+
+. "${NP_COMMON:-/usr/share/netpanel/common.sh}"
+
+np_err() {
+	# yarım kalan değişiklikleri geri al
+	uci -q revert netpanel; uci -q revert dhcp; uci -q revert wireless
+	printf '{"ok":false,"error":"%s"}\n' "$1"
+	exit 0
+}
+
+np_clean_name() {
+	printf '%s' "$1" | tr -d '\000-\037\042\047\134' | cut -c1-96
+}
+
+# dnsmasq için geçerli hostname (Türkçe harfleri sadeleştir)
+np_hostname() {
+	printf '%s' "$1" |
+		sed 's/ç/c/g;s/Ç/C/g;s/ğ/g/g;s/Ğ/G/g;s/ı/i/g;s/İ/I/g;s/ö/o/g;s/Ö/O/g;s/ş/s/g;s/Ş/S/g;s/ü/u/g;s/Ü/U/g' |
+		tr -c 'A-Za-z0-9-' '-' | sed 's/--*/-/g;s/^-//;s/-$//' | cut -c1-63
+}
+
+# Dosya yaşı (sn); yoksa çok büyük
+np_age() { [ -f "$1" ] && echo $(($(date +%s) - $(date -r "$1" +%s))) || echo 999999; }
+
+# Arka planda tazeleme: işaret dosyası $2 sn içinde tazelenmişse tekrar başlatma
+np_refresh_bg() { # cachefile minage marker cmd...
+	local f=$1 min=$2 mk=$3
+	shift 3
+	[ "$(np_age "$f")" -gt "$min" ] || return 0
+	[ "$(np_age "$mk")" -gt 60 ] || return 0
+	touch "$mk"
+	("$@" >/dev/null 2>&1 </dev/null &)
+}
+
+clients() {
+	local tmp wans dev ssid s
+	tmp=$(mktemp)
+	wans=$(np_wan_devs)
+
+	[ -f "$NP_LEASES" ] && awk '{ printf "L\t%s\t%s\t%s\t%s\n", tolower($2), $3, $4, $1 }' "$NP_LEASES" >>"$tmp"
+	np_neigh | awk -F'\t' -v w=" $wans " '$3 != "" && index(w, " " $3 " ") == 0 { print "N\t" $0 }' >>"$tmp"
+
+	# Harici Huawei AP'nin cihaz listesi (Wi-Fi/Ethernet, bant, üretici) — önbellekten
+	if [ "$(uci -q get netpanel.huawei.enabled)" = 1 ]; then
+		np_refresh_bg /tmp/netpanel-hw/hosts.tsv 20 /tmp/netpanel-hw.refresh /usr/libexec/netpanel/huawei.sh hosts
+		[ -f /tmp/netpanel-hw/hosts.tsv ] && awk '{ print "H\t" $0 }' /tmp/netpanel-hw/hosts.tsv >>"$tmp"
+	fi
+	# Web arayüzü taraması (10 dk önbellek)
+	np_refresh_bg /tmp/netpanel-web.tsv 600 /tmp/netpanel-web.refresh /usr/libexec/netpanel/webscan.sh
+	# saat planları (P \t mac \t plan plan ...) ve şu an plan yüzünden engelli olanlar (B \t mac)
+	uci -q show netpanel | awk -v q="'" '
+		{ k = substr($0, 1, index($0, "=") - 1); v = substr($0, index($0, "=") + 1); n = split(k, p, ".") }
+		n == 3 && p[3] == "mac" { gsub(q, "", v); mac[p[2]] = tolower(v) }
+		n == 3 && p[3] == "schedule" { gsub(q, "", v); sc[p[2]] = v }
+		END { for (s in sc) if (mac[s] != "") printf "P\t%s\t%s\n", mac[s], sc[s] }' >>"$tmp"
+	[ -f /tmp/netpanel-sched.now ] && awk 'NF { print "B\t" $1 }' /tmp/netpanel-sched.now >>"$tmp"
+	[ -f /tmp/netpanel-web.tsv ] && awk '{ print "U\t" $0 }' /tmp/netpanel-web.tsv >>"$tmp"
+	np_hosts | awk -F'\t' '{ printf "S\t%s\t%s\t%s\n", $2, $3, $4 }' >>"$tmp"
+	np_meta | awk '{ print "M\t" $0 }' >>"$tmp"
+
+	for dev in $(iwinfo 2>/dev/null | awk '/ESSID/ { print $1 }'); do
+		ssid=$(iwinfo "$dev" info 2>/dev/null | sed -n 's/.*ESSID: "\(.*\)".*/\1/p' | tr -d '\t')
+		iwinfo "$dev" assoclist 2>/dev/null |
+			awk -v d="$dev" -v s="$ssid" '/^[0-9A-Fa-f][0-9A-Fa-f]:/ { printf "W\t%s\t%s\t%s\t%s\n", tolower($1), $2, d, s }'
+	done >>"$tmp"
+
+	for s in dl ul; do
+		nft list set inet netpanel "$s" 2>/dev/null | tr ',{}\n' '    ' |
+			awk -v t="$s" '{
+				for (i = 1; i <= NF; i++) {
+					if ($i ~ /^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$/) cur = $i
+					else if ($i == "bytes" && cur != "") { printf "C\t%s\t%s\t%s\n", t, cur, $(i + 1); cur = "" }
+				}
+			}'
+	done >>"$tmp"
+
+	awk -F'\t' '
+		function esc(s) { gsub(/\\/, "\\\\", s); gsub(/"/, "\\\"", s); gsub(/[\001-\037]/, "", s); return s }
+		function str(s) { return "\"" esc(s) "\"" }
+		function bool(b) { return b ? "true" : "false" }
+		$1 == "L" { m = $2; seen[m] = 1; lip[m] = $3; if ($4 != "*") hn[m] = $4; lexp[m] = $5; next }
+		$1 == "N" { m = $2; seen[m] = 1; nip[m] = $3; ndev[m] = $4; st[m] = $5; next }
+		$1 == "S" { m = $2; seen[m] = 1; sip[m] = $3; sname[m] = $4; next }
+		$1 == "M" { m = $2; seen[m] = 1; mname[m] = $3; down[m] = $4; up[m] = $5; blk[m] = $6; mtype[m] = $7; prio[m] = $8; next }
+		$1 == "W" { m = $2; seen[m] = 1; wsig[m] = $3; wdev[m] = $4; wssid[m] = $5; next }
+		$1 == "H" { m = $2; hif[m] = $3; hact[m] = $4; hname[m] = $5; hmanu[m] = $6; hicon[m] = $7; next }
+		$1 == "U" { web[$2] = $3; next }
+		$1 == "P" { sch[$2] = $3; next }
+		$1 == "B" { sblk[$2] = 1; next }
+		$1 == "C" { cnt[$2 SUBSEP $3] = $4; next }
+		END {
+			printf "{\"clients\":["
+			n = 0
+			for (m in seen) {
+				ip = nip[m] != "" ? nip[m] : (lip[m] != "" ? lip[m] : sip[m])
+				name = mname[m] != "" ? mname[m] : (sname[m] != "" ? sname[m] : hn[m])
+				# bağlantı: OpenWrt Wi-Fi > Huawei Wi-Fi/LAN > router ethernet
+				band = ""; via = "router"
+				if (m in wdev) { wifi = 1 }
+				else if (hif[m] ~ /GHz/) { wifi = 1; via = "huawei"; band = (hif[m] ~ /^2/) ? "2g" : "5g" }
+				else { wifi = 0; if (hif[m] != "") via = "huawei" }
+				online = (m in wdev) || hact[m] == 1 || st[m] ~ /REACHABLE|DELAY|PROBE|PERMANENT/
+				sig = (wsig[m] ~ /^-?[0-9]+$/) ? wsig[m] : "null"
+				if (n++) printf ","
+				printf "{\"mac\":%s,\"ip\":%s,\"name\":%s,\"hostname\":%s,", str(m), str(ip), str(name), str(hn[m] != "" ? hn[m] : hname[m])
+				printf "\"static\":%s,\"static_ip\":%s,\"online\":%s,\"state\":%s,\"dev\":%s,", bool(sip[m] != ""), str(sip[m]), bool(online), str(st[m]), str(ndev[m])
+				printf "\"conn\":%s,\"wifi_dev\":%s,\"ssid\":%s,\"signal\":%s,", str(wifi ? "wifi" : "lan"), str(wdev[m]), str(wssid[m]), sig
+				printf "\"priority\":%s,", bool(prio[m] == 1)
+				printf "\"sched_blocked\":%s,\"schedule\":[", bool(m in sblk)
+				ns = split(sch[m], se, " "); for (j = 1; j <= ns; j++) printf "%s%s", (j > 1 ? "," : ""), str(se[j])
+				printf "],"
+				printf "\"band\":%s,\"via\":%s,\"vendor\":%s,\"hw_icon\":%s,\"type\":%s,\"web\":[", str(band), str(via), str(hmanu[m]), str(hicon[m]), str(mtype[m])
+				k = split(web[ip], wu, " "); for (j = 1; j <= k; j++) printf "%s%s", (j > 1 ? "," : ""), str(wu[j])
+				printf "],"
+				printf "\"rx_bytes\":%d,\"tx_bytes\":%d,", cnt["dl" SUBSEP ip] + 0, cnt["ul" SUBSEP ip] + 0
+				printf "\"limit_down\":%d,\"limit_up\":%d,\"blocked\":%s,\"lease_expires\":%d}", down[m] + 0, up[m] + 0, bool(blk[m] == 1), lexp[m] + 0
+			}
+			printf "]}\n"
+		}' "$tmp"
+	rm -f "$tmp"
+}
+
+status() {
+	local off hw tbl cnt
+	off=$(uci -q get firewall.@defaults[0].flow_offloading)
+	hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
+	nft list table inet netpanel >/dev/null 2>&1 && tbl=true || tbl=false
+	[ "$(cat /tmp/netpanel.counters 2>/dev/null)" = 1 ] && cnt=true || cnt=false
+	printf '{"version":"1.1.0","offload":%s,"offload_hw":%s,"table":%s,"counters":%s}\n' \
+		"$([ "$off" = 1 ] && echo true || echo false)" "$([ "$hw" = 1 ] && echo true || echo false)" "$tbl" "$cnt"
+}
+
+np_host_section() { np_hosts | awk -F'\t' -v m="$1" '$2 == m { print $1; exit }'; }
+
+np_set_static() { # mac ip name
+	local mac=$1 ip=$2 name=$3 sec other hn
+	np_valid_ip "$ip" || np_err "Geçersiz IP adresi"
+	other=$(np_hosts | awk -F'\t' -v ip="$ip" -v m="$mac" '$3 == ip && $2 != m { print $2; exit }')
+	[ -n "$other" ] && np_err "Bu IP başka bir cihaza ayrılmış ($other)"
+	ubus call network.interface dump 2>/dev/null | jsonfilter -e '@.interface[*]["ipv4-address"][*].address' | grep -qx "$ip" &&
+		np_err "Bu IP routerın kendi adresi"
+	sec=$(np_host_section "$mac")
+	[ -n "$sec" ] || sec=$(uci add dhcp host)
+	uci set "dhcp.$sec.mac=$mac"
+	uci set "dhcp.$sec.ip=$ip"
+	hn=$(np_hostname "$name")
+	if [ -n "$hn" ]; then uci set "dhcp.$sec.name=$hn"; uci set "dhcp.$sec.dns=1"; fi
+}
+
+np_del_static() {
+	local sec
+	sec=$(np_host_section "$1")
+	[ -n "$sec" ] && uci delete "dhcp.$sec"
+}
+
+set_client() {
+	local input mac sid t v name ip st blk dhcp=0
+	input=$(cat)
+	json_load "$input" 2>/dev/null || np_err "Geçersiz istek"
+	json_get_var mac mac
+	mac=$(echo "$mac" | tr 'A-F' 'a-f')
+	np_valid_mac "$mac" || np_err "Geçersiz MAC adresi"
+	sid=$(np_sid "$mac")
+
+	[ "$(uci -q get "netpanel.$sid")" = client ] || {
+		uci set "netpanel.$sid=client"
+		uci set "netpanel.$sid.mac=$mac"
+	}
+
+	if json_get_type t name; then
+		json_get_var name name
+		name=$(np_clean_name "$name")
+		if [ -n "$name" ]; then uci set "netpanel.$sid.name=$name"; else uci -q delete "netpanel.$sid.name"; fi
+	fi
+	[ -n "$name" ] || name=$(uci -q get "netpanel.$sid.name")
+
+	for t in down up; do
+		if json_get_type v "$t"; then
+			json_get_var v "$t"
+			case "$v" in '' | *[!0-9]*) np_err "Hız sınırı sayı olmalı" ;; esac
+			[ "$v" -le 10000 ] || np_err "Hız sınırı en fazla 10000 Mbit/s"
+			if [ "$v" -gt 0 ]; then uci set "netpanel.$sid.$t=$v"; else uci -q delete "netpanel.$sid.$t"; fi
+		fi
+	done
+
+	if json_get_type t blocked; then
+		json_get_var blk blocked
+		if [ "$blk" = 1 ]; then uci set "netpanel.$sid.blocked=1"; else uci -q delete "netpanel.$sid.blocked"; fi
+	fi
+
+	if json_get_type t type; then
+		json_get_var v type
+		if [ -z "$v" ]; then
+			uci -q delete "netpanel.$sid.type"
+		else
+			case " $NP_TYPES " in *" $v "*) uci set "netpanel.$sid.type=$v" ;; *) np_err "Geçersiz cihaz tipi" ;; esac
+		fi
+	fi
+
+	if json_get_type t priority; then
+		json_get_var v priority
+		if [ "$v" = 1 ]; then uci set "netpanel.$sid.priority=1"; else uci -q delete "netpanel.$sid.priority"; fi
+	fi
+
+	# Saat planı: ["12345|23:00|07:00", ...]  (1=Pzt..7=Paz; boş dizi = plan yok)
+	if json_get_type t schedule && [ "$t" = array ]; then
+		local keys k e
+		uci -q delete "netpanel.$sid.schedule"
+		json_select schedule
+		json_get_keys keys
+		for k in $keys; do
+			json_get_var e "$k"
+			echo "$e" | grep -qE '^[1-7]{1,7}\|([01][0-9]|2[0-3]):[0-5][0-9]\|([01][0-9]|2[0-3]):[0-5][0-9]$' ||
+				np_err "Geçersiz saat planı: $e"
+			[ "${e#*|}" != "${e##*|}|${e##*|}" ] || np_err "Başlangıç ve bitiş saati aynı olamaz"
+			uci add_list "netpanel.$sid.schedule=$e"
+		done
+		json_select ..
+		[ "$(echo $keys | wc -w)" -le 8 ] || np_err "En fazla 8 plan eklenebilir"
+	fi
+
+	if json_get_type t static; then
+		json_get_var st static
+		if [ "$st" = 1 ]; then
+			json_get_var ip ip
+			np_set_static "$mac" "$ip" "$name"
+		else
+			np_del_static "$mac"
+		fi
+		dhcp=1
+	elif [ -n "$name" ] && [ -n "$(np_host_section "$mac")" ]; then
+		# isim değişti, sabit kayıttaki hostname'i de güncelle
+		v=$(np_hostname "$name")
+		[ -n "$v" ] && uci set "dhcp.$(np_host_section "$mac").name=$v" && dhcp=1
+	fi
+
+	uci commit netpanel
+	if [ "$dhcp" = 1 ]; then
+		uci commit dhcp
+		/etc/init.d/dnsmasq reload >/dev/null 2>&1
+	fi
+	/usr/sbin/netpanel-apply >/dev/null 2>&1
+	echo '{"ok":true}'
+}
+
+forget_client() {
+	local input mac
+	input=$(cat)
+	json_load "$input" 2>/dev/null || np_err "Geçersiz istek"
+	json_get_var mac mac
+	mac=$(echo "$mac" | tr 'A-F' 'a-f')
+	np_valid_mac "$mac" || np_err "Geçersiz MAC adresi"
+	uci -q delete "netpanel.$(np_sid "$mac")"
+	uci commit netpanel
+	if [ -n "$(np_host_section "$mac")" ]; then
+		np_del_static "$mac"
+		uci commit dhcp
+		/etc/init.d/dnsmasq reload >/dev/null 2>&1
+	fi
+	/usr/sbin/netpanel-apply >/dev/null 2>&1
+	echo '{"ok":true}'
+}
+
+set_wifi() {
+	local input sec t v enc
+	input=$(cat)
+	json_load "$input" 2>/dev/null || np_err "Geçersiz istek"
+	json_get_var sec section
+	case "$sec" in '' | *[!A-Za-z0-9_]*) np_err "Geçersiz Wi-Fi bölümü" ;; esac
+	[ "$(uci -q get "wireless.$sec")" = wifi-iface ] || np_err "Wi-Fi ağı bulunamadı"
+
+	if json_get_type t ssid; then
+		json_get_var v ssid
+		v=$(printf '%s' "$v" | tr -d '\000-\037')
+		[ ${#v} -ge 1 ] && [ ${#v} -le 32 ] || np_err "Ağ adı 1-32 karakter olmalı"
+		uci set "wireless.$sec.ssid=$v"
+	fi
+	if json_get_type t key; then
+		json_get_var v key
+		enc=$(uci -q get "wireless.$sec.encryption")
+		case "$enc" in
+		none | owe | '') ;;
+		*) [ ${#v} -ge 8 ] && [ ${#v} -le 63 ] || np_err "Şifre 8-63 karakter olmalı" ;;
+		esac
+		uci set "wireless.$sec.key=$v"
+	fi
+	if json_get_type t disabled; then
+		json_get_var v disabled
+		if [ "$v" = 1 ]; then uci set "wireless.$sec.disabled=1"; else uci -q delete "wireless.$sec.disabled"; fi
+	fi
+	uci commit wireless
+	# yanıt döndükten sonra Wi-Fi'yi yeniden yükle (bağlantı kısa süre kopar)
+	(sleep 1; wifi reload) >/dev/null 2>&1 </dev/null &
+	echo '{"ok":true}'
+}
+
+HW=/usr/libexec/netpanel/huawei.sh
+
+# CPU sayaçları (arayüz iki örnek arasındaki farktan % hesaplar), disk, sıcaklık
+sysinfo() {
+	local _c u n s i w q sq st total idle cores model temp f dt du
+	read -r _c u n s i w q sq st _ </proc/stat
+	total=$((u + n + s + i + w + q + sq + ${st:-0}))
+	idle=$((i + w))
+	cores=$(grep -c '^processor' /proc/cpuinfo)
+	model=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//')
+	temp=""
+	for f in /sys/class/thermal/thermal_zone*/temp /sys/class/hwmon/hwmon*/temp1_input; do
+		[ -r "$f" ] && temp=$(cat "$f" 2>/dev/null) && [ -n "$temp" ] && break
+	done
+	set -- $(df -k / | awk 'NR == 2 { print $2, $3 }')
+	dt=${1:-0}; du=${2:-0}
+	json_init
+	json_add_string model "$model"
+	json_add_int cores "${cores:-1}"
+	json_add_object cpu
+	json_add_int total "$total"
+	json_add_int idle "$idle"
+	json_close_object
+	json_add_object disk
+	json_add_int total "$((dt * 1024))"
+	json_add_int used "$((du * 1024))"
+	json_close_object
+	[ -n "$temp" ] && json_add_double temp "$(awk -v t="$temp" 'BEGIN { printf "%.1f", t / 1000 }')"
+	json_dump
+}
+
+# Panel (root) şifresini değiştir: eski şifre rpcd ile doğrulanır
+set_password() {
+	local input old new sid
+	input=$(cat)
+	json_load "$input" 2>/dev/null || np_err "Geçersiz istek"
+	json_get_var old old
+	json_get_var new new
+	[ ${#new} -ge 8 ] && [ ${#new} -le 128 ] || np_err "Yeni şifre 8-128 karakter olmalı"
+	case "$new" in *"
+"*) np_err "Şifre satır sonu içeremez" ;; esac
+	json_init
+	json_add_string username root
+	json_add_string password "$old"
+	sid=$(ubus call session login "$(json_dump)" 2>/dev/null | jsonfilter -e '@.ubus_rpc_session')
+	[ -n "$sid" ] || np_err "Mevcut şifre yanlış"
+	ubus call session destroy "{\"ubus_rpc_session\":\"$sid\"}" >/dev/null 2>&1
+	printf '%s\n%s\n' "$new" "$new" | passwd root >/dev/null 2>&1 || np_err "Şifre değiştirilemedi"
+	echo '{"ok":true}'
+}
+
+web_scan() {
+	rm -f /tmp/netpanel-web.refresh
+	touch /tmp/netpanel-web.refresh
+	(/usr/libexec/netpanel/webscan.sh >/dev/null 2>&1 </dev/null &)
+	echo '{"ok":true}'
+}
+
+hw_missing() {
+	command -v curl >/dev/null && command -v openssl >/dev/null && return 1
+	np_err "Huawei bağlantısı için curl ve openssl-util paketleri gerekli"
+}
+
+hw_config() {
+	local input t v
+	input=$(cat)
+	json_load "$input" 2>/dev/null || np_err "Geçersiz istek"
+	[ "$(uci -q get netpanel.huawei)" = huawei ] || uci set netpanel.huawei=huawei
+	if json_get_type t host; then
+		json_get_var v host
+		np_valid_ip "$v" || np_err "Geçersiz Huawei IP adresi"
+		uci set "netpanel.huawei.host=$v"
+	fi
+	if json_get_type t username; then
+		json_get_var v username
+		case "$v" in '' | *[!A-Za-z0-9_.@-]*) np_err "Geçersiz kullanıcı adı" ;; esac
+		uci set "netpanel.huawei.username=$v"
+	fi
+	if json_get_type t password; then
+		json_get_var v password
+		v=$(printf '%s' "$v" | tr -d '\000-\037')
+		[ -n "$v" ] && uci set "netpanel.huawei.password=$v"
+	fi
+	if json_get_type t enabled; then
+		json_get_var v enabled
+		[ "$v" = 1 ] && uci set netpanel.huawei.enabled=1 || uci set netpanel.huawei.enabled=0
+	fi
+	uci commit netpanel
+	chmod 600 /etc/config/netpanel
+	$HW reset
+	echo '{"ok":true}'
+}
+
+hw_set() {
+	local input band en
+	input=$(cat)
+	json_load "$input" 2>/dev/null || np_err "Geçersiz istek"
+	json_get_var band band
+	json_get_var en enabled
+	case "$band" in 2g | 5g) ;; *) np_err "Geçersiz bant" ;; esac
+	[ "$(uci -q get netpanel.huawei.enabled)" = 1 ] || np_err "Huawei bağlantısı kapalı"
+	hw_missing
+	$HW set "$band" "$([ "$en" = 1 ] && echo 1 || echo 0)"
+}
+
+case "$1" in
+list)
+	echo '{"clients":{},"status":{},"set_client":{"mac":"str","name":"str","static":true,"ip":"str","down":32,"up":32,"blocked":true,"type":"str","priority":true,"schedule":[]},"sysinfo":{},"set_password":{"old":"str","new":"str"},"web_scan":{},"forget_client":{"mac":"str"},"set_wifi":{"section":"str","ssid":"str","key":"str","disabled":true},"hw_status":{},"hw_set":{"band":"str","enabled":true},"hw_config":{"enabled":true,"host":"str","username":"str","password":"str"},"wan_config":{},"wan_set":{"name":"str","proto":"str","username":"str","password":"str","vlan":32,"dns":"str","mtu":32,"ipaddr":"str","netmask":"str","gateway":"str","enabled":true},"wan_mode":{"mode":"str","primary":"str","weights":{}},"wan_confirm":{},"wan_revert":{},"wan_reconnect":{"name":"str"},"wan_events":{},"sqm_config":{},"sqm_set":{"section":"str","interface":"str","enabled":true,"download":32,"upload":32,"script":"str","linklayer":"str","overhead":32},"sqm_delete":{"section":"str"},"set_offload":{"enabled":true},"speedtest_start":{"wan":"str","mode":"str","server":"str"},"speedtest_status":{},"hw_wifi_get":{},"hw_wifi_set":{"band":"str","ssid":"str","password":"str","channel":32,"hidden":true},"hw_wifi_scan":{},"usage_get":{"days":32},"ping_get":{"hours":32},"newdev_list":{},"newdev_ack":{},"notify_get":{},"notify_set":{"enabled":true,"token":"str","chat_id":"str","wan":true,"newdev":true,"block_new":true},"notify_test":{},"tz_get":{},"tz_set":{"zone":"str"},"backup_create":{},"backup_restore":{"data":"str"},"cf_status":{},"cf_set_token":{"token":"str"},"cf_set_enabled":{"enabled":true},"cf_lookup":{"api_token":"str"},"cf_publish":{"api_token":"str","account_id":"str","zone_id":"str","subdomain":"str","service":"str","access_email":"str"},"cf_unpublish":{"api_token":"str","hostname":"str"},"integ_get":{},"integ_set":{"id":"str","enabled":true},"scan_start":{"ports":true},"scan_status":{}}'
+	;;
+call)
+	case "$2" in
+	clients) clients ;;
+	status) status ;;
+	set_client) set_client ;;
+	forget_client) forget_client ;;
+	set_wifi) set_wifi ;;
+	hw_status)
+		if [ "$(uci -q get netpanel.huawei.enabled)" = 1 ] && ! command -v curl >/dev/null; then
+			echo '{"enabled":true,"connected":false,"error":"curl ve openssl-util paketleri gerekli"}'
+		else
+			$HW status
+		fi
+		;;
+	hw_set) hw_set ;;
+	usage_get | ping_get | newdev_list | newdev_ack | notify_get | notify_set | notify_test | tz_get | tz_set | backup_create | backup_restore | integ_get | integ_set)
+		/usr/libexec/netpanel/extras.sh "$2" ;;
+	cf_status | cf_set_token | cf_set_enabled | cf_lookup | cf_publish | cf_unpublish)
+		ucode /usr/libexec/netpanel/cfctl.uc "${2#cf_}" ;;
+	hw_wifi_get | hw_wifi_set | hw_wifi_scan)
+		[ "$(uci -q get netpanel.huawei.enabled)" = 1 ] || np_err "Huawei bağlantısı kapalı"
+		hw_missing
+		$HW "${2#hw_}"
+		;;
+	sysinfo) sysinfo ;;
+	set_password) set_password ;;
+	web_scan) web_scan ;;
+	scan_start | scan_status)
+		[ "$(uci -q get netpanel.integrations.scanner)" = 1 ] || np_err "Ağ tarayıcı entegrasyonu kapalı"
+		/usr/libexec/netpanel/scanner.sh "${2#scan_}" ;;
+	hw_config) hw_config ;;
+	wan_config) /usr/libexec/netpanel/wanctl.sh config ;;
+	wan_set) /usr/libexec/netpanel/wanctl.sh set ;;
+	wan_mode) /usr/libexec/netpanel/wanctl.sh mode ;;
+	wan_confirm) /usr/libexec/netpanel/wanctl.sh confirm ;;
+	wan_revert) /usr/libexec/netpanel/wanctl.sh revert ;;
+	wan_reconnect) /usr/libexec/netpanel/wanctl.sh reconnect ;;
+	wan_events) /usr/libexec/netpanel/wanctl.sh events ;;
+	sqm_config) /usr/libexec/netpanel/sqmctl.sh config ;;
+	sqm_set) /usr/libexec/netpanel/sqmctl.sh set ;;
+	sqm_delete) /usr/libexec/netpanel/sqmctl.sh delete ;;
+	set_offload) /usr/libexec/netpanel/sqmctl.sh offload ;;
+	speedtest_start) /usr/libexec/netpanel/sqmctl.sh st_start ;;
+	speedtest_status) /usr/libexec/netpanel/sqmctl.sh st_status ;;
+	*) echo '{"ok":false,"error":"Bilinmeyen metot"}' ;;
+	esac
+	;;
+esac

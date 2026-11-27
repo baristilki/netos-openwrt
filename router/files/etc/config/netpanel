@@ -1,0 +1,11 @@
+
+config netpanel 'main'
+	option enabled '1'
+
+# Cihaz kayıtları arayüzden eklenir, örnek:
+# config client 'm_aabbccddeeff'
+#	option mac 'aa:bb:cc:dd:ee:ff'
+#	option name 'Salon TV'
+#	option down '50'     # Mbit/s
+#	option up '10'       # Mbit/s
+#	option blocked '1'

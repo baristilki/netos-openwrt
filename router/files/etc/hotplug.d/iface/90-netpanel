@@ -1,0 +1,26 @@
+#!/bin/sh
+# NetOS: internet hatlarının bağlanma/kopma olaylarını kaydet ve (açıksa) Telegram'a bildir
+#   ifup/ifdown         -> netifd (arayüz/PPPoE oturumu)
+#   connected/disconnected -> mwan3 (ping ile internet erişimi)
+
+case "$ACTION" in ifup | ifdown | connected | disconnected) ;; *) exit 0 ;; esac
+[ -n "$INTERFACE" ] || exit 0
+
+uci -q show firewall | sed -n "s/^firewall\.\(@zone\[[0-9]*\]\)\.name='wan'$/\1/p" |
+	while read -r z; do uci -q get "firewall.$z.network"; done | tr ' ' '\n' | grep -qx "$INTERFACE" || exit 0
+
+LOG=/etc/netpanel/events.log
+mkdir -p /etc/netpanel
+printf '%s\t%s\t%s\n' "$(date +%s)" "$INTERFACE" "$ACTION" >>"$LOG"
+# en fazla 500 satır tut
+[ "$(wc -l <"$LOG")" -gt 500 ] && { tail -n 300 "$LOG" >"$LOG.tmp" && mv "$LOG.tmp" "$LOG"; }
+
+# bildirim: yalnız mwan3'ün internet erişimi olayları (PPPoE yeniden bağlanırken çift mesaj olmasın)
+case "$ACTION" in
+disconnected) msg="$INTERFACE hattında internet KOPTU" ;;
+connected) msg="$INTERFACE hattı tekrar çevrimiçi" ;;
+*) exit 0 ;;
+esac
+. /usr/share/netpanel/common.sh
+(np_notify "$msg" wan >/dev/null &)
+exit 0

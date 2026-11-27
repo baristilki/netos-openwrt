@@ -1,0 +1,7 @@
+# yerel / iç notlar
+.claude/
+docs/codex-briefs/
+node_modules/
+*.log
+.DS_Store
+Thumbs.db

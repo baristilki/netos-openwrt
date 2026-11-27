@@ -1,0 +1,31 @@
+#!/bin/sh
+# NetOS:
+#  - cihaz yeni IP aldığında indirme sınırı/engel kurallarını IP'ye göre tazele
+#  - ilk kez görülen cihazı kaydet, bildir, istenirse otomatik engelle (yeni cihaz bildirimi)
+
+case "$ACTION" in add | update) ;; *) exit 0 ;; esac
+
+if [ "$ACTION" = add ] && [ -n "$MACADDR" ]; then
+	. /usr/share/netpanel/common.sh
+	mac=$(echo "$MACADDR" | tr 'A-F' 'a-f')
+	known=/etc/netpanel/known
+	mkdir -p /etc/netpanel
+	if np_valid_mac "$mac" && [ -s "$known" ] && ! grep -qx "$mac" "$known"; then
+		echo "$mac" >>"$known"
+		name=$(printf '%s' "${HOSTNAME:-}" | tr -d '\t\n\r')
+		printf '%s\t%s\t%s\t%s\n' "$(date +%s)" "$mac" "${IPADDR:-}" "$name" >>/etc/netpanel/newdev.log
+		[ "$(wc -l </etc/netpanel/newdev.log)" -gt 300 ] && { tail -n 200 /etc/netpanel/newdev.log >/tmp/nd && mv /tmp/nd /etc/netpanel/newdev.log; }
+		blocked=""
+		if [ "$(uci -q get netpanel.main.block_new)" = 1 ]; then
+			sid=$(np_sid "$mac")
+			uci set "netpanel.$sid=client"; uci set "netpanel.$sid.mac=$mac"; uci set "netpanel.$sid.blocked=1"
+			uci commit netpanel
+			blocked=" — otomatik olarak engellendi"
+		fi
+		(np_notify "Yeni cihaz ağa katıldı: ${name:-isimsiz} ($mac, ${IPADDR:-IP yok})$blocked" newdev >/dev/null &)
+		[ -n "$blocked" ] && { /usr/sbin/netpanel-apply >/dev/null 2>&1 & exit 0; }
+	fi
+fi
+
+uci -q show netpanel | grep -qE '\.(down|blocked|schedule)=' || exit 0
+/usr/sbin/netpanel-apply >/dev/null 2>&1 &

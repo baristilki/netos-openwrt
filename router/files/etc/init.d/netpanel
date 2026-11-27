@@ -1,0 +1,18 @@
+#!/bin/sh /etc/rc.common
+# NetPanel: açılışta hız sınırı / engel / sayaç kurallarını yükler
+
+START=99
+STOP=10
+
+start() {
+	/usr/sbin/netpanel-apply
+}
+
+stop() {
+	nft delete table inet netpanel 2>/dev/null
+	return 0
+}
+
+reload() {
+	start
+}
