@@ -1,5 +1,7 @@
 # NetOS — OpenWrt için sade ev ağı arayüzü
 
+**Türkçe** · [English](README.en.md) · [Kullanım kılavuzu](docs/KULLANIM.md)
+
 Keenetic tarzı, Türkçe, hafif bir yönetim paneli. Ek paket derlemeden her OpenWrt 22.03+ router'a kurulur.
 
 LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
@@ -29,6 +31,7 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 - Ebeveyn kontrolü: cihaz başına gün/saat planı (ör. hafta içi 23:00–07:00 internet kapalı);
   AdGuard ile cihaz başına yetişkin içerik filtresi, güvenli arama, YouTube/TikTok gibi servis engeli
 - Yeni cihaz uyarısı (isteğe bağlı otomatik engel), eve geldi / ayrıldı bildirimi
+- **Cihaz başına internet hattı** (iki hat varsa): "önce Turknet, koparsa diğeri" ya da "yalnız ikinci hat"
 - Cihaz başına anlık bağlantılar, günlük trafik istatistiği (30-100 gün)
 - **Uygulama bazlı trafik**: YouTube, Netflix, Steam, TikTok… hangi cihaz neye ne kadar harcadı
   (bugün / 7 / 30 gün, cihaz filtresi). Servisler AdGuard Home'un DNS kayıtlarından tanınır;
@@ -59,8 +62,15 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 - GitHub'dan tek tıkla güncelleme, isteğe bağlı gece otomatik güncelleme
 
 ### Yol haritası
-- IPv6 ayarları
-- OpenWrt Wi-Fi için kanal analizi ve 802.11r (kopmadan geçiş)
+Keenetic gibi hazır router'larda olup NetOS'ta henüz olmayanlar (önem sırasıyla):
+- IPv6 ayarları (operatör veriyorsa açma, cihazlara dağıtma)
+- VPN istemcisi: seçilen cihazları dışarıdaki bir VPN üzerinden çıkarmak
+- Wi-Fi zaman planı (ör. gece 01:00–07:00 Wi-Fi kapalı; Huawei üzerinden)
+- IPsec / OpenVPN / L2TP VPN sunucusu (şu an yalnız WireGuard)
+- Mobil uygulama (şimdilik panel telefona uyumlu, dışarıdan erişim Cloudflare Tunnel ile)
+
+Donanıma bağlı olanlar: mesh Wi-Fi sistemi, USB (dosya paylaşımı, yazıcı, 4G yedek hat),
+802.11r kopmadan geçiş ve OpenWrt Wi-Fi kanal analizi — router'ın kendi Wi-Fi'si ya da USB'si yoksa uygulanamaz.
 
 ## Gereksinimler
 - OpenWrt 22.03+ (fw4 / nftables). 23.05 ve 24.10 hedeflendi.
@@ -82,6 +92,8 @@ Router IP'si farklıysa `192.168.1.1`'i değiştir.
    ssh root@192.168.1.1 "sh /tmp/netpanel/install.sh"
    ```
 4. Tarayıcıda aç: `http://192.168.1.1/netos/` — root kullanıcısı ve router şifresiyle giriş.
+
+Sonrası için adım adım anlatım: [Kullanım kılavuzu](docs/KULLANIM.md).
 
 ## Entegrasyonlar
 NetOS → Entegrasyon menüsünden ihtiyacınız olanı açın; kapalı olanlar arayüzde görünmez.
@@ -138,6 +150,7 @@ ssh root@192.168.1.1 "uci set firewall.@defaults[0].flow_offloading=0; uci set f
 - İndirme sınırı IPv4'e uygulanır. IPv6 aktifse cihaz IPv6 üzerinden sınırı aşabilir.
   Yükleme sınırı ve engel MAC'e göre çalışır (IPv4+IPv6).
 - Sabit IP, cihaz DHCP'yi yenileyince (Wi-Fi kapat/aç) devreye girer.
+- Uygulama bazlı trafik ve cihaz başına hat kuralı şimdilik yalnız IPv4'ü kapsar.
 
 ## Kaldırma
 ```powershell
@@ -150,7 +163,8 @@ ssh root@192.168.1.1 "sh /tmp/netpanel/uninstall.sh"
 router/
   install.sh, uninstall.sh
   files/
-    usr/libexec/rpcd/netpanel      ubus nesnesi: clients, status, set_client, forget_client, set_wifi
+    usr/libexec/rpcd/netpanel      ubus nesnesi: clients, status, set_client, forget_client, set_wifi…
+    usr/libexec/netpanel/          yardımcı betikler (wanctl.sh, huawei.sh, apps.uc, collect.sh…)
     usr/share/netpanel/common.sh   ortak shell yardımcıları
     usr/sbin/netpanel-apply        nft tablosu "inet netpanel" (sınır/engel/sayaç)
     usr/share/rpcd/acl.d/netpanel.json
