@@ -205,7 +205,7 @@ function detect(mt, dt) {
 		for (let s in tops) if (tops[s] > tc) { tc = tops[s]; top = s; }
 		if (length(kinds)) {
 			const was = heavy[mac];
-			heavy[mac] = { kinds, since: was?.since ?? h[0][0], down: int(ad * 10 + 0.5) / 10, up: int(au * 10 + 0.5) / 10, conns: h[n - 1][3], top, notified: was?.notified ?? false, name: devName(mac) };
+			heavy[mac] = { kinds, since: was?.since ?? h[0][0], down: int(ad * 10 + 0.5) / 10.0, up: int(au * 10 + 0.5) / 10.0, conns: h[n - 1][3], top, notified: was?.notified ?? false, name: devName(mac) };
 			if (!heavy[mac].notified) {
 				heavy[mac].notified = true;
 				const k = join(', ', map(kinds, (x) => ({ download: 'yüksek indirme (' + heavy[mac].down + ' Mbit/s)', upload: 'yüksek yükleme (' + heavy[mac].up + ' Mbit/s)', connections: 'çok fazla bağlantı (' + heavy[mac].conns + ')' })[x]));
