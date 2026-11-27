@@ -163,6 +163,23 @@
   function on(ev, fn) { (listeners[ev] = listeners[ev] || []).push(fn); }
   function emit(ev, data) { (listeners[ev] || []).forEach((f) => { try { f(data); } catch (e) { console.error(e); } }); }
   function dropSession() { sid = null; store.set(null); emit('auth'); }
+  // "Erişim reddedildi" her zaman oturumun bittiği anlamına gelmez: oturum açıkken yeni eklenmiş bir
+  // metot (ör. güncellemeden sonra) izin listesinde olmayabilir. Oturum gerçekten geçersizse çıkış yapılır.
+  async function sessionAlive(s) {
+    try {
+      const r = await fetch('/ubus', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jsonrpc: '2.0', id: ++rpcId, method: 'call', params: [s, 'session', 'access', { scope: 'ubus', object: 'netpanel', function: 'status' }] }) });
+      const j = await r.json();
+      return !j.error && j.result?.[0] === 0 && j.result?.[1]?.access === true;
+    } catch (_) {
+      return true; // ağ hatasında oturumu düşürme
+    }
+  }
+  async function denied(s, obj, method) {
+    if (await sessionAlive(s)) throw new ApiError('Bu işlem için yetki yok (' + obj + '.' + method + '). Çıkış yapıp tekrar giriş yapın.', 'perm');
+    dropSession();
+    throw new ApiError('Oturum süresi doldu', 'auth');
+  }
 
   /* ── ubus çağrısı ───────────────────────────────────────────────────────── */
   let rpcId = 0;
@@ -184,11 +201,11 @@
     if (!res.ok) throw new ApiError('HTTP ' + res.status, 'http');
     const j = await res.json();
     if (j.error) {
-      if (j.error.code === -32002 && !opts.anon) { dropSession(); throw new ApiError('Oturum süresi doldu', 'auth'); }
+      if (j.error.code === -32002 && !opts.anon) await denied(s, obj, method);
       throw new ApiError(j.error.message || 'RPC hatası', j.error.code);
     }
     const [code, data] = j.result || [9];
-    if (code === 6 && !opts.anon) { dropSession(); throw new ApiError('Oturum süresi doldu', 'auth'); }
+    if (code === 6 && !opts.anon) await denied(s, obj, method);
     if (code !== 0) throw new ApiError(UBUS_ERR[code] || 'ubus hatası ' + code, code);
     return data || {};
   }
