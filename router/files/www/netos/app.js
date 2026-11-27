@@ -1087,7 +1087,9 @@
           : x.id === 'huawei' && on
             ? state.huawei?.connected
               ? '<span class="badge ok">Bağlı</span>'
-              : '<span class="badge warn">Ayar bekliyor</span>'
+              : state.huawei?.error
+                ? `<span class="badge err" title="${esc(state.huawei.error)}">${/şifre/i.test(state.huawei.error) ? 'Şifre yanlış' : 'Bağlanamadı'}</span>`
+                : '<span class="badge warn">Ayar bekliyor</span>'
             : x.id === 'cloudflare' && on && state.xTunnel
               ? state.xTunnel.running && state.xTunnel.connections
                 ? '<span class="badge ok">Tünel bağlı</span>'
@@ -3124,8 +3126,15 @@
         state.huawei = await NP.getHuawei();
         state.huaweiError = null;
         state.xInteg = null;
-        toast('Huawei ayarlar\u0131 kaydedildi');
         render();
+        // kaydettikten sonra bağlantının sonucunu açıkça göster
+        if (!f.elements.enabled.checked) toast('Huawei ayarlar\u0131 kaydedildi');
+        else if (state.huawei?.connected) toast('Huawei’ye bağlandı ✓');
+        else {
+          toast('Huawei’ye bağlanılamadı');
+          let e2 = document.getElementById('huawei-error');
+          if (e2) e2.textContent = state.huawei?.error || 'Huawei’ye bağlanılamadı';
+        }
       } catch (x) {
         err.textContent = x.message;
       } finally {

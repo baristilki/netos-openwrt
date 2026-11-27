@@ -485,6 +485,10 @@ window.NETOS_EN = {
   "“Yalnız” seçilirse o hat koptuğunda bu cihazın interneti de kesilir. Kural cihazın IP adresine bağlıdır; cihaza otomatik sabit IP ayrılır.": "With “Only”, this device loses internet when that line drops. The rule is tied to the device’s IP, so a static IP is reserved automatically.",
   "Bu hat çoklu hat sisteminde (mwan#) tanımlı değil": "This line isn’t defined in the multi-line system (mwan3)",
   "Cihazın IP adresi bulunamadı; cihaz açıkken tekrar deneyin": "Couldn’t find the device’s IP address; try again while it’s online",
+  "Şifre yanlış": "Wrong password",
+  "Bağlanamadı": "Can’t connect",
+  "Huawei’ye bağlandı ✓": "Connected to Huawei ✓",
+  "Huawei’ye bağlanılamadı": "Couldn’t connect to Huawei",
 };
 
 /* Parça çevirileri: tam eşleşme yoksa metnin içinde geçen bu parçalar değiştirilir (değişken içeren metinler için). Uzundan kısaya uygulanır. */
