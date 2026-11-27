@@ -473,6 +473,113 @@ wifi_scan() {
 }
 
 rm -f "$D/err"
+# ── Misafir Wi-Fi (Huawei'nin kendi misafir ağı: ayrı ağ, ev cihazlarını göremez) ──
+#   GET  ntwk/guest_network            -> [2,4 GHz, 5 GHz] { ID, WifiSsid, EnableFrequency, SecOpt none|aes,
+#                                          ValidTime 1=4 saat 2=1 gün 3=sınırsız, RestTime (sn), WpaPreSharedKey }
+#   POST ntwk/guest_network (;enp)     -> { config2g, config5g: { ID, WifiSsid, ValidTime, SecOpt none|tkip,
+#                                          WpaPreSharedKey (RSA), Enable } }
+#   GET/POST ntwk/guest_network_limitrate -> { Enable 0|1, X_DownPeakRate (kbit/s), PeakRate (yükleme) }
+#   POST ntwk/guest_network_resttime   -> süreyi 30 dk uzatır
+hw_fail() { printf '{"ok":false,"error":"%s"}\n' "$(printf '%s' "${1:-$(cat "$D/err" 2>/dev/null)}" | tr -d '"\')"; }
+guest_get() {
+	local g r l pw=0 key on2 on5 en sec
+	[ "$1" = withkey ] && pw=1
+	if [ $pw = 1 ]; then g=$(api_get ntwk/guest_network); else g=$(api_get 'ntwk/guest_network?type=notshowpassall'); fi || { hw_fail; return; }
+	r=$(api_get ntwk/wlanradio) || { hw_fail; return; }
+	l=$(api_get ntwk/guest_network_limitrate 2>/dev/null)
+	on2=$(boolv "$(jget "$g" '@[0].EnableFrequency')"); on5=$(boolv "$(jget "$g" '@[1].EnableFrequency')")
+	[ "$(boolv "$(jget "$r" '@.Enable2G')")" = 1 ] || on2=0
+	[ "$(boolv "$(jget "$r" '@.Enable5G')")" = 1 ] || on5=0
+	en=0; [ $on2 = 1 ] || [ $on5 = 1 ] && en=1
+	sec=1; [ "$(jget "$g" '@[0].SecOpt')" = none ] && sec=0
+	json_init
+	json_add_boolean ok 1
+	json_add_boolean enabled $en
+	json_add_boolean band2g $on2
+	json_add_boolean band5g $on5
+	json_add_string ssid "$(jget "$g" '@[0].WifiSsid')"
+	json_add_boolean secure $sec
+	json_add_int valid "$(jget "$g" '@[0].ValidTime' || echo 3)"
+	json_add_int rest "$(jget "$g" '@[0].RestTime' | tr -cd 0-9)"
+	key=$(jget "$g" '@[0].WpaPreSharedKey')
+	[ $pw = 1 ] && [ $sec = 1 ] && case "$key" in '' | '********') ;; *) json_add_string password "$key" ;; esac
+	json_add_boolean limit "$(boolv "$(jget "$l" '@.Enable')")"
+	json_add_int limit_mbps "$(( $(jget "$l" '@.X_DownPeakRate' | tr -cd 0-9 || echo 0) / 1000 ))"
+	json_dump
+}
+guest_cfg() { # önek ID ssid valid secopt key enable
+	json_add_object "$1"
+	json_add_string ID "$2"
+	json_add_string WifiSsid "$3"
+	json_add_int ValidTime "$4"
+	json_add_string SecOpt "$5"
+	json_add_string WpaPreSharedKey "$6"
+	json_add_boolean Enable "$7"
+	json_close_object
+}
+guest_set() {
+	local input t en ssid pw open valid lim mbps g id2 id5 cur_sec sec key r ec e body
+	input=$(cat)
+	json_load "$input" 2>/dev/null || { hw_fail "Geçersiz istek"; return; }
+	en=""; ssid=""; pw=""; open=""; valid=""; lim=""; mbps=""
+	json_get_type t enabled && json_get_var en enabled
+	json_get_type t ssid && json_get_var ssid ssid
+	json_get_type t password && json_get_var pw password
+	json_get_type t open && json_get_var open open
+	json_get_type t valid && json_get_var valid valid
+	json_get_type t limit && json_get_var lim limit
+	json_get_type t limit_mbps && json_get_var mbps limit_mbps
+	g=$(api_get 'ntwk/guest_network?type=notshowpassall') || { hw_fail; return; }
+	id2=$(jget "$g" '@[0].ID'); id5=$(jget "$g" '@[1].ID')
+	[ -n "$id2" ] && [ -n "$id5" ] || { hw_fail "Bu Huawei modelinde misafir ağı bulunamadı"; return; }
+	[ -n "$ssid" ] || ssid=$(jget "$g" '@[0].WifiSsid')
+	[ "$(printf '%s' "$ssid" | wc -c)" -ge 1 ] && [ "$(printf '%s' "$ssid" | wc -c)" -le 32 ] || { hw_fail "Ağ adı 1-32 bayt olmalı"; return; }
+	[ -n "$valid" ] || valid=$(jget "$g" '@[0].ValidTime')
+	case "$valid" in 1 | 2 | 3) ;; *) valid=3 ;; esac
+	[ -n "$en" ] || en=$(boolv "$(jget "$g" '@[0].EnableFrequency')")
+	cur_sec=1; [ "$(jget "$g" '@[0].SecOpt')" = none ] && cur_sec=0
+	sec=$cur_sec; [ "$open" = 1 ] && sec=0; [ "$open" = 0 ] && sec=1
+	if [ $sec = 1 ]; then
+		if [ -n "$pw" ]; then
+			[ ${#pw} -ge 8 ] && [ ${#pw} -le 63 ] || { hw_fail "Şifre 8-63 karakter olmalı"; return; }
+		elif [ $cur_sec = 0 ]; then
+			hw_fail "Şifreli misafir ağı için bir şifre girin"; return
+		fi
+	fi
+	rsa_pem || { rm -f "$JAR"; hw_fail "Huawei şifreleme anahtarı alınamadı, tekrar deneyin"; return; }
+	if [ $sec = 1 ] && [ -n "$pw" ]; then key=$(hw_enc "$pw"); else key=$(hw_enc '********'); fi
+	[ -n "$key" ] || { hw_fail "Şifre şifrelenemedi"; return; }
+	secopt=none; [ $sec = 1 ] && secopt=tkip
+	json_init
+	json_add_object data
+	guest_cfg config2g "$id2" "$ssid" "$valid" "$secopt" "$key" "$en"
+	guest_cfg config5g "$id5" "$ssid" "$valid" "$secopt" "$key" "$en"
+	json_close_object
+	body=$(json_dump)
+	r=$(hw_post_raw ntwk/guest_network "$body" "application/json;charset=UTF-8;enp"); ec=$(jget "$r" '@.errcode')
+	if [ "$ec" != 0 ]; then
+		e="Huawei misafir ayarını kabul etmedi (${ec:-yanıt yok})"
+		case "$(jget "$r" '@.WpaPreSharedKey')" in *same*) e="Misafir şifresi ev ağının şifresiyle aynı olamaz" ;; esac
+		case "$(jget "$r" '@.WifiSsid')$(jget "$r" '@.ssid')" in *same*) e="Misafir ağının adı ev ağıyla aynı olamaz" ;; ?*) e="Bu ağ adı kullanılamıyor" ;; esac
+		[ "$(jget "$r" '@.parameter')" = parameter.err ] && e="Huawei değerleri kabul etmedi (şifre biçimi?)"
+		hw_fail "$e"; return
+	fi
+	if [ -n "$lim" ]; then
+		case "$mbps" in '' | *[!0-9]*) mbps=0 ;; esac
+		[ "$lim" = 1 ] && { [ "$mbps" -ge 1 ] && [ "$mbps" -le 1000 ] || { hw_fail "Hız sınırı 1-1000 Mbit/s olmalı (misafir ağı kaydedildi)"; return; }; }
+		[ "$mbps" -ge 1 ] || mbps=$(( $(jget "$(api_get ntwk/guest_network_limitrate)" '@.X_DownPeakRate' | tr -cd 0-9 || echo 0) / 1000 ))
+		[ "$mbps" -ge 1 ] || mbps=10
+		r=$(hw_post ntwk/guest_network_limitrate "{\"Enable\":$lim,\"PeakRate\":$((mbps * 100)),\"X_DownPeakRate\":$((mbps * 1000))}")
+		[ "$(jget "$r" '@.errcode')" = 0 ] || { hw_fail "Misafir ağı kaydedildi ama hız sınırı uygulanamadı"; return; }
+	fi
+	echo '{"ok":true}'
+}
+guest_extend() {
+	local r
+	r=$(hw_post ntwk/guest_network_resttime '{}')
+	[ "$(jget "$r" '@.errcode')" = 0 ] && echo '{"ok":true}' || hw_fail "Süre uzatılamadı"
+}
+
 case "$1" in
 status) status ;;
 hosts) hosts ;;
@@ -480,6 +587,9 @@ set) set_radio "$2" "$3" ;;
 wifi_get) wifi_get ;;
 wifi_set) wifi_set ;;
 wifi_scan) wifi_scan ;;
+guest_get) guest_get "$2" ;;
+guest_set) guest_set ;;
+guest_extend) guest_extend ;;
 proof) client_proof "$2" "$3" "$4" "$5" "$6"; echo ;;
 reset) rm -f "$FAIL" "$JAR" "$CSRF" ;;
 *) echo "kullanım: $0 status | set <2g|5g> <0|1>" >&2; exit 1 ;;

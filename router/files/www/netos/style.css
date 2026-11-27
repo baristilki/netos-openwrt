@@ -2815,3 +2815,18 @@ input.field {
 .app-rank .x-rank-name small { display: block; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
 .app-rank b small { display: block; color: var(--muted); font-weight: 500; font-size: 11px; }
 @media (max-width: 760px) { .x-rank.app-rank { grid-template-columns: 12px minmax(0, 1fr) auto; } .app-rank .x-track { grid-column: 2 / -1; grid-row: 2; } }
+
+/* ── Misafir Wi-Fi ── */
+.guest-status { display: grid; gap: 10px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.guest-status .toggle-line { padding: 0; border: 0; }
+.guest-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.guest-actions .btn svg { width: 15px; height: 15px; margin-right: 4px; vertical-align: -3px; }
+.guest-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px 14px; }
+.guest-grid [hidden] { display: none; }
+/* dar kartta Huawei satırı: ad tam görünsün, düğmeler alt satıra insin */
+.huawei-large, .hw-wifi-list { container-type: inline-size; }
+@container (max-width: 380px) {
+  .hw-wifi-row { flex-wrap: wrap; }
+  .hw-wifi-row .wifi-info { flex: 1 1 calc(100% - 60px); }
+  .hw-wifi-row .wifi-right { width: 100%; justify-content: flex-end; }
+}

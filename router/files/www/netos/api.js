@@ -1284,6 +1284,23 @@
     };
   }
 
+  // Huawei misafir Wi-Fi -> { enabled, ssid, secure, valid (1=4 saat, 2=1 gün, 3=sınırsız), rest (sn), limit, limitMbps }
+  const mapGuest = (r) => ({ enabled: !!r.enabled, ssid: r.ssid || '', secure: !!r.secure, valid: +r.valid || 3, rest: +r.rest || 0, limit: !!r.limit, limitMbps: +r.limit_mbps || 0, password: r.password || '' });
+  async function getGuestWifi() { return mapGuest(await npCall('hw_guest_get', {})); }
+  // patch: { enabled, ssid, password ('' = değiştirme), open, valid, limit, limitMbps }
+  async function setGuestWifi(p) {
+    const a = {};
+    ['enabled', 'open', 'limit'].forEach((k) => { if (p[k] != null) a[k] = !!p[k]; });
+    if (p.ssid != null) a.ssid = String(p.ssid).trim();
+    if (p.password) a.password = String(p.password);
+    if (p.valid) a.valid = +p.valid;
+    if (p.limitMbps != null) a.limit_mbps = Math.round(+p.limitMbps || 0);
+    await npCall('hw_guest_set', a);
+  }
+  async function extendGuestWifi() { await npCall('hw_guest_extend', {}); }
+  // QR için şifre (Huawei izin veriyorsa) -> { ssid, secure, password }
+  async function getGuestQr() { return mapGuest(await npCall('hw_guest_qr', {})); }
+
   // band: '2g' | '5g' | 'both';  patch: { ssid?, password? ('' = değiştirme), channel? (0 = otomatik), hidden? }
   // Not: Huawei "çift bant tek ağ" (dbho) açıkken ad/şifre iki banda birlikte uygulanır.
   async function saveHuaweiWifi(band, patch) {
@@ -1596,6 +1613,7 @@
         return r(1, 1) || r(21, 1) || r(1, 21) || (!f(0, 0) && !f(20, 0) && !f(0, 20) && x > 0 && y > 0 && x < 28 && y < 28 && ((x * 7 + y * 13 + x * y) % 5 < 2)) ? `<rect x="${x}" y="${y}" width="1" height="1"/>` : ''; }).join('') + '</svg>';
     const demoCf = { installed: true, enabled: true, token_set: true, token_valid: true, tunnel_id: 'a1b2c3d4-1111-2222-3333-444455556666',
       running: true, connections: 4, hosts: [{ hostname: 'ha.ornek.com', service: 'http://192.168.1.199:8123' }], curl: true };
+    const demoGuest = { enabled: true, ssid: 'Huawei-Misafir', secure: true, password: 'misafir2026', valid: 2, until: nowSec() + 15 * 3600 + 1200, limit: true, limit_mbps: 20 };
     const hwCfg = { dbho: false, bands: [
       { band: '2g', ssid: 'Huawei-EvAgi', enabled: true, security: '11i', encryption: 'AES', channel: '0', actual_channel: '6', hidden: false, standard: 'b/g/n/ax', bandwidth: '20_40' },
       { band: '5g', ssid: 'Huawei-EvAgi-5G', enabled: true, security: '11iandWPA3', encryption: 'AES+SAE', channel: '36', actual_channel: '36', hidden: false, standard: 'a/n/ac/ax', bandwidth: '20_40_80' },
@@ -1980,6 +1998,21 @@
       },
       'netpanel.cf_unpublish': (a) => { demoCf.hosts = demoCf.hosts.filter((h) => h.hostname !== a.hostname); return { ok: true }; },
       'netpanel.hw_wifi_get': () => ({ ok: true, ...JSON.parse(JSON.stringify(hwCfg)) }),
+      'netpanel.hw_guest_get': () => ({ ok: true, ...demoGuest, password: undefined, rest: demoGuest.enabled && demoGuest.valid < 3 ? Math.max(0, demoGuest.until - nowSec()) : 0 }),
+      'netpanel.hw_guest_qr': () => ({ ok: true, ...demoGuest }),
+      'netpanel.hw_guest_extend': () => { demoGuest.until += 1800; return { ok: true }; },
+      'netpanel.hw_guest_set': (a) => {
+        if (a.password && a.password.length < 8) return { ok: false, error: 'Şifre 8-63 karakter olmalı' };
+        if (a.open === false && !a.password && !demoGuest.secure) return { ok: false, error: 'Şifreli misafir ağı için bir şifre girin' };
+        if (a.ssid != null) demoGuest.ssid = a.ssid;
+        if (a.password) demoGuest.password = a.password;
+        if (a.open != null) demoGuest.secure = !a.open;
+        if (a.valid) demoGuest.valid = a.valid;
+        if (a.enabled != null) { if (a.enabled && !demoGuest.enabled) demoGuest.until = nowSec() + (demoGuest.valid === 1 ? 14400 : 86400); demoGuest.enabled = a.enabled; }
+        if (a.limit != null) demoGuest.limit = a.limit;
+        if (a.limit_mbps) demoGuest.limit_mbps = a.limit_mbps;
+        return { ok: true };
+      },
       'netpanel.hw_wifi_set': (a) => {
         const targets = a.band === 'both' || (hwCfg.dbho && (a.ssid || a.password)) ? ['2g', '5g'] : [a.band];
         const other = hwCfg.bands.find((b) => !targets.includes(b.band));
@@ -2039,7 +2072,7 @@
     getUsage, getApps, getPingHistory, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
     getPortForwards, savePortForward, deletePortForward, setUpnp, setFirewall, getConnections, getLan, setLan, confirmLan, revertLan,
-    getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,
+    getGuestWifi, setGuestWifi, extendGuestWifi, getGuestQr, getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,
     getTplink, setTplinkConfig, setTplinkBand, saveTplinkWifi,
     getAdguard, setupAdguard, enableAdguard, connectAdguard, setAdguardProtection, getAdguardServices, getAdguardGlobal, setAdguardGlobal,
     getAdguardClient, setAdguardClient, AG_POPULAR, getSpeedSchedule, setSpeedSchedule, getSecurity, setHttpsRedirect, setStrictLogin, getLockouts, unbanIp, finishWizard, getLog, getSysOpt, setSysOpt,

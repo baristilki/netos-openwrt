@@ -65,6 +65,7 @@
       chart:
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/></svg>',
       apps: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>',
+      users: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 5.2a3 3 0 0 1 0 5.6M17.5 14.2A5.5 5.5 0 0 1 20.5 19"/></svg>',
       bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg>',
       cloud:
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 9a4.5 4.5 0 0 0 1 9z"/></svg>',
@@ -527,9 +528,9 @@
       )
       .join('');
     let h = state.huawei?.enabled
-      ? `<section class="card wifi-detail huawei-detail">${cardHead('wifi', 'HUAWEI WiFi AX2', `<a href="http://${esc(state.huawei.host || '192.168.1.2')}/" target="_blank" rel="noopener">Huawei arayüzünü aç ↗</a>`)}${huaweiCards(true)}<p class="field-hint">Ağ adı, şifre ve kanal aşağıdaki "Wi-Fi ayarları" bölümünden değiştirilir; misafir ağı ve gelişmiş ayarlar için Huawei arayüzünü kullanın.</p></section>`
+      ? `<section class="card wifi-detail huawei-detail">${cardHead('wifi', 'HUAWEI WiFi AX2', `<a href="http://${esc(state.huawei.host || '192.168.1.2')}/" target="_blank" rel="noopener">Huawei arayüzünü aç ↗</a>`)}${huaweiCards(true)}<p class="field-hint">Ağ adı, şifre ve kanal aşağıdaki "Wi-Fi ayarları" bölümünden, misafir ağı "Misafir Wi-Fi" bölümünden değiştirilir; gelişmiş ayarlar için Huawei arayüzünü kullanın.</p></section>`
       : `<section class="card wifi-detail"><h3>Harici Wi-Fi</h3><p class="subtitle">Huawei Wi-Fi'yi bağlayarak bantları buradan yönetin.</p><a href="#/integrations">Huawei Wi-Fi'yi bağla →</a></section>`;
-    return `${pageHead('Kablosuz ağlar', 'Wi-Fi', 'Ağları ve yayın durumunu yönetin.')}<div class="page-wifi">${ow}${h}${hwWifiSections()}</div>`;
+    return `${pageHead('Kablosuz ağlar', 'Wi-Fi', 'Ağları ve yayın durumunu yönetin.')}<div class="page-wifi">${ow}${h}${guestCard()}${hwWifiSections()}</div>`;
   }
 
   /* ── Huawei Wi-Fi ayarları + kanal analizi (4. aşama) ───────────────────── */
@@ -547,6 +548,107 @@
       if (state.page === '/wifi') render();
     }
   }
+  /* ── Misafir Wi-Fi (Huawei misafir ağı) ── */
+  const GUEST_VALID = [[1, '4 saat'], [2, '1 gün'], [3, 'Sınırsız']];
+  function fmtRest(s) {
+    if (!s) return '';
+    let d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60);
+    return d ? `${d} gün ${h} sa` : h ? `${h} sa ${m} dk` : `${m} dk`;
+  }
+  function guestCard() {
+    let hw = state.huawei;
+    if (!hw?.enabled || !hw.connected) return '';
+    if (!state.xGuest && !state.xGuestError) loadX('xGuest', () => NP.getGuestWifi(), '/wifi');
+    let head = (extra = '') => cardHead('users', 'Misafir Wi-Fi', extra);
+    if (state.xGuestError) return `<section class="card guest-card">${head()}<div class="form-error">${esc(state.xGuestError)}</div><p class="field-hint">Bu Huawei modeli misafir ağını desteklemiyor olabilir.</p></section>`;
+    let g = state.xGuest;
+    if (!g) return `<section class="card guest-card">${head()}<div class="empty">Misafir ağı okunuyor…</div></section>`;
+    let F = state.guestF || g,
+      timer = g.enabled && g.valid < 3 && g.rest ? `<span class="pill"><i class="dot"></i>${esc(fmtRest(g.rest))} kaldı</span><button class="btn small" type="button" data-guest-extend>+30 dk</button>` : '';
+    let status = `<div class="guest-status"><div class="toggle-line"><div><strong>${g.enabled ? esc(g.ssid) : 'Misafir ağı kapalı'}</strong><p>${g.enabled ? `${g.secure ? 'Şifreli' : 'Şifresiz (açık)'} · ${esc(GUEST_VALID.find((x) => x[0] === g.valid)?.[1] || '')}${g.limit ? ` · en fazla ${g.limitMbps} Mbit/s` : ''}` : 'Misafirleriniz ev cihazlarınızı (bilgisayar, kamera, NAS) göremeyen ayrı bir ağa bağlanır.'}</p></div><input class="switch" type="checkbox" data-guest-toggle aria-label="Misafir ağını aç/kapat" ${g.enabled ? 'checked' : ''}></div>${g.enabled ? `<div class="guest-actions">${timer}<button class="btn small" type="button" data-guest-qr>${icon('qr')}QR ile paylaş</button></div>` : ''}</div>`;
+    let form = `<form id="guest-form" class="x-form guest-form"><div class="guest-grid">
+      <div class="field-wrap"><label for="guest-ssid">Ağ adı</label><input class="field" id="guest-ssid" name="ssid" maxlength="32" value="${esc(F.ssid)}" required></div>
+      <div class="field-wrap"><label for="guest-sec">Güvenlik</label><select class="field" id="guest-sec" name="open" data-guest-sec><option value="0" ${F.secure ? 'selected' : ''}>Şifreli (önerilen)</option><option value="1" ${F.secure ? '' : 'selected'}>Şifresiz (açık)</option></select></div>
+      <div class="field-wrap guest-pw" ${F.secure ? '' : 'hidden'}><label for="guest-pw">Şifre</label><input class="field" id="guest-pw" name="password" type="password" minlength="8" maxlength="63" autocomplete="new-password" placeholder="${g.secure ? 'Değiştirmek için yazın' : 'En az 8 karakter'}"></div>
+      <div class="field-wrap"><label for="guest-valid">Açık kalma süresi</label><select class="field" id="guest-valid" name="valid">${GUEST_VALID.map(([v, l]) => `<option value="${v}" ${F.valid === v ? 'selected' : ''}>${l}</option>`).join('')}</select></div>
+      <div class="field-wrap"><label for="guest-limit">Hız sınırı</label><select class="field" id="guest-limit" name="limit" data-guest-limit><option value="0" ${F.limit ? '' : 'selected'}>Sınırsız</option><option value="1" ${F.limit ? 'selected' : ''}>Sınırla</option></select></div>
+      <div class="field-wrap guest-mbps" ${F.limit ? '' : 'hidden'}><label for="guest-mbps">En fazla (Mbit/s)</label><input class="field num" id="guest-mbps" name="limitMbps" type="number" min="1" max="1000" value="${F.limitMbps || 20}"></div>
+    </div><p class="field-hint">Süre dolunca Huawei misafir ağını kendisi kapatır. Hız sınırı tüm misafirlerin toplamı içindir.</p><div class="form-error" id="guest-error"></div><div class="x-form-foot"><button class="btn primary" type="submit">Kaydet</button></div></form>`;
+    return `<section class="card guest-card">${head()}${status}${form}</section>`;
+  }
+  function readGuest(f) {
+    return { ssid: f.ssid.value.trim(), open: f.open.value === '1', secure: f.open.value !== '1', password: f.password.value, valid: +f.valid.value, limit: f.limit.value === '1', limitMbps: +f.limitMbps.value || 0 };
+  }
+  async function saveGuest(patch, msg) {
+    try {
+      await NP.setGuestWifi(patch);
+      state.guestF = null;
+      state.xGuest = await NP.getGuestWifi();
+      toast(msg);
+    } catch (e) {
+      let el = document.getElementById('guest-error');
+      if (el) el.textContent = e.message;
+      else toast(e.message);
+      return false;
+    }
+    if (state.page === '/wifi') render();
+    return true;
+  }
+  document.addEventListener('change', async (e) => {
+    let t = e.target;
+    if (t.matches('[data-guest-sec]')) {
+      document.querySelector('.guest-pw').hidden = t.value === '1';
+      return;
+    }
+    if (t.matches('[data-guest-limit]')) {
+      document.querySelector('.guest-mbps').hidden = t.value !== '1';
+      return;
+    }
+    if (t.matches('[data-guest-toggle]')) {
+      let on = t.checked, g = state.xGuest;
+      if (on && !g.secure && !confirm('Misafir ağı şifresiz açılacak; menzildeki herkes bağlanabilir. Devam edilsin mi?')) return (t.checked = false);
+      t.disabled = true;
+      let ok = await saveGuest({ enabled: on }, on ? 'Misafir ağı açıldı' : 'Misafir ağı kapatıldı');
+      if (!ok) { t.checked = !on; t.disabled = false; }
+    }
+  });
+  document.addEventListener('submit', async (e) => {
+    if (e.target.id !== 'guest-form') return;
+    e.preventDefault();
+    let f = e.target, p = readGuest(f), err = document.getElementById('guest-error');
+    err.textContent = '';
+    if (!p.ssid) return (err.textContent = 'Ağ adı boş olamaz');
+    if (p.secure && p.password && p.password.length < 8) return (err.textContent = 'Şifre en az 8 karakter olmalı');
+    if (p.secure && !p.password && !state.xGuest.secure) return (err.textContent = 'Şifreli misafir ağı için bir şifre girin');
+    if (p.limit && !(p.limitMbps >= 1 && p.limitMbps <= 1000)) return (err.textContent = 'Hız sınırı 1-1000 Mbit/s olmalı');
+    if (p.open && state.xGuest.secure && !confirm('Misafir ağı şifresiz olacak; menzildeki herkes bağlanabilir. Devam edilsin mi?')) return;
+    state.guestF = { ...p, password: '' };
+    let btn = f.querySelector('[type=submit]');
+    btn.disabled = true;
+    btn.textContent = 'Kaydediliyor…';
+    if (!(await saveGuest(p, 'Misafir Wi-Fi kaydedildi'))) { btn.disabled = false; btn.textContent = 'Kaydet'; }
+  });
+  document.addEventListener('click', async (e) => {
+    let b = e.target.closest('[data-guest-extend],[data-guest-qr]');
+    if (!b) return;
+    if (b.matches('[data-guest-extend]')) {
+      b.disabled = true;
+      try {
+        await NP.extendGuestWifi();
+        state.xGuest = await NP.getGuestWifi();
+        toast('Süre 30 dakika uzatıldı');
+      } catch (x) {
+        toast(x.message);
+      }
+      return render();
+    }
+    let g = state.xGuest, svg = null;
+    try {
+      let q = await NP.getGuestQr();
+      if (!q.secure || q.password) svg = await NP.qrSvg(NP.wifiQrText(q.ssid, q.password, !q.secure));
+    } catch (_) {}
+    openXPanel({ kind: 'qr', ssid: g.ssid, open: !g.secure, bandLabel: 'Misafir ağı', svg });
+  });
   function hwWifiSections() {
     let hw = state.huawei;
     if (!hw?.enabled || !hw.connected) return '';

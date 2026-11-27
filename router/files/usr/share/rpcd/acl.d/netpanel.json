@@ -39,7 +39,8 @@
 					"sysopt_get",
 					"tp_status",
 					"conn_list",
-					"auth_list"
+					"auth_list",
+					"hw_guest_get"
 				],
 				"system": [
 					"board",
@@ -145,7 +146,10 @@
 					"tp_wifi_set",
 					"fw_set",
 					"sec_strict",
-					"auth_unban"
+					"auth_unban",
+					"hw_guest_set",
+					"hw_guest_extend",
+					"hw_guest_qr"
 				],
 				"system": [
 					"reboot"
