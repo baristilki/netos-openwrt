@@ -186,8 +186,9 @@
     let link = ([p, i, t]) => `<a href="#${p}" class="${isActive(p) ? 'active' : ''}"${isActive(p) ? ' aria-current="page"' : ''}>${icon(i)}<span>${t}</span></a>`;
     if (NP.hasSession() && !state.xInteg && !state.xIntegError) loadX('xInteg', () => NP.getIntegrations());
     if (NP.hasSession() && !state.xSec && !state.xSecError) loadSec();
-    if (NP.hasSession() && state.xSec && !state.wizShown && !state.xSec.wizardDone && state.page !== '/welcome') {
+    if (NP.hasSession() && state.xSec && !state.wizShown && !state.xSec.wizardDone && !lsGet('np_wiz_seen') && state.page !== '/welcome') {
       state.wizShown = true;
+      lsSet('np_wiz_seen', '1');
       setTimeout(() => (location.hash = '#/welcome'));
     }
     if (NP.hasSession() && !state.lanChecked) {
@@ -207,7 +208,7 @@
     let bottom =
       mobileMain.map(([p, i, t]) => `<a href="#${p}" class="${isActive(p) ? 'active' : ''}">${icon(i)}<span>${p === '/' ? 'Ana' : p === '/devices' ? 'Cihaz' : t}</span></a>`).join('') +
       `<a href="#/more" class="${moreActive ? 'active' : ''}">${icon('menu')}<span>Menü</span></a>`;
-    return `<aside class="sidebar"><div class="brand brand-center">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span><span class="brand-ver">v${esc(state.status?.version || APP_VERSION)} · ${esc(fw)}</span></div><nav class="nav">${side}</nav><div class="sidebar-foot"><button class="logout-btn" type="button" data-logout>${icon('logout')}<span>Çıkış yap</span></button></div></aside><div class="main"><header class="topbar"><div class="mobile-brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><div class="top-status">${state.error ? '<span class="pill"><i class="dot bad"></i> Bağlantı sorunu</span>' : ''}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${state.overview ? esc(state.overview.hostname) : 'NetOS'}</span>${langButton()}${themeButton()}</div></header><main class="content" id="content"></main></div><nav class="bottom-nav">${bottom}</nav><div id="drawer-host"></div><div class="toast" id="toast" role="status"></div>`;
+    return `<aside class="sidebar"><div class="brand brand-center">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span><span class="brand-ver">v${esc(state.status?.version || APP_VERSION)} · ${esc(fw)}</span></div><nav class="nav">${side}</nav><div class="sidebar-foot"><button class="logout-btn" type="button" data-logout>${icon('logout')}<span>Çıkış yap</span></button></div></aside><div class="main"><header class="topbar"><div class="mobile-brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><div class="top-status">${state.error ? '<span class="pill"><i class="dot bad"></i> Bağlantı sorunu</span>' : ''}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${state.overview ? esc(state.overview.hostname) : 'NetOS'}</span>${bellButton()}${langButton()}${themeButton()}</div></header><main class="content" id="content"></main></div><nav class="bottom-nav">${bottom}</nav><div id="drawer-host"></div><div class="toast" id="toast" role="status"></div>`;
   }
   // Mobil "Menü" sayfası: alt menüye sığmayan bölümler + tema + çıkış
   function morePage() {
@@ -303,6 +304,75 @@
       return null;
     }
   }
+  function lsSet(k, v) {
+    try {
+      localStorage.setItem(k, v);
+    } catch (_) {}
+  }
+  /* Bir uyarı bant olarak yalnız ilk görüldüğü oturumda çıkar; sonra yalnız zilde durur. */
+  function onceBanner(key) {
+    if (state.bannerOnce?.[key]) return !state.bannerOnce[key].closed;
+    if (lsGet(key)) return false;
+    state.bannerOnce = { ...state.bannerOnce, [key]: { closed: false } };
+    return true;
+  }
+  // gösterilen bantlar sayfa kapanınca "görüldü" sayılır (ilk çizimden hemen sonra yönlenme olsa da kaybolmaz)
+  addEventListener('pagehide', () => Object.keys(state.bannerOnce || {}).forEach((k) => lsSet(k, '1')));
+  /* ── Bildirimler (üst bardaki zil) ── */
+  function issues() {
+    let out = [];
+    if (state.error) out.push({ id: 'conn', level: 'bad', title: 'Router’a ulaşılamıyor', text: 'Veriler güncellenemiyor; bağlantıyı kontrol edin.' });
+    if (state.xSec?.rootPwEmpty) out.push({ id: 'pw', level: 'bad', title: 'Router’ın şifresi yok', text: 'Aynı ağdaki herkes bu panele, LuCI’ye ve SSH’a şifresiz girebilir.', href: '#/welcome', action: 'Şifre belirle' });
+    for (let w of state.overview?.wans || []) if (w.status === 'offline' || w.online === false) out.push({ id: 'wan:' + w.name, level: 'bad', title: `${w.label || w.name} çevrimdışı`, text: 'Bu internet hattından bağlantı yok; modemi ve kabloyu kontrol edin.', href: '#/internet', action: 'İnternet' });
+    if (state.lanPending) out.push({ id: 'lan', level: 'warn', title: 'Onay bekleyen adres değişikliği', text: 'Yeni router adresini onaylamazsanız eski ayara dönülecek.', href: '#/lan', action: 'Yerel ağ' });
+    if (state.status?.offload) out.push({ id: 'offload', level: 'warn', title: 'Flow offloading açık', text: 'Cihaz hızları, hız sınırları ve oyun önceliği tam çalışmaz.', href: '#/system', action: 'Sistem' });
+    for (let pt of state.xPorts?.ports || []) {
+      if (pt.link && pt.speed && pt.maxSpeed > pt.speed) out.push({ id: 'slow:' + pt.name, level: 'warn', title: `${pt.name} portu düşük hızda`, text: `${portSpeed(pt.maxSpeed)} destekliyor ama ${portSpeed(pt.speed)} ile bağlı. Kabloyu ve karşı cihazı kontrol edin.`, href: '#/', action: 'Portlar' });
+      if (pt.link && pt.duplex === 'half') out.push({ id: 'half:' + pt.name, level: 'warn', title: `${pt.name} yarı çift yönlü`, text: 'Genelde kablo ya da karşı cihaz sorunudur ve hızı düşürür.', href: '#/', action: 'Portlar' });
+    }
+    return out;
+  }
+  function seenIssues() {
+    try {
+      return JSON.parse(lsGet('np_seen_issues') || '[]');
+    } catch (_) {
+      return [];
+    }
+  }
+  function bellButton() {
+    if (!NP.hasSession()) return '';
+    let list = issues(),
+      seen = seenIssues(),
+      fresh = list.filter((i) => !seen.includes(i.id)).length,
+      worst = list.some((i) => i.level === 'bad') ? 'bad' : list.length ? 'warn' : '';
+    let panel = !state.bellOpen
+      ? ''
+      : `<div class="bell-panel" role="dialog" aria-label="Bildirimler"><div class="bell-head"><strong>Bildirimler</strong><span>${list.length ? `${list.length} uyarı` : ''}</span></div>${
+          list.length
+            ? `<ul class="bell-list">${list
+                .map((i) => `<li class="bell-item ${i.level}"><i class="dot ${i.level === 'bad' ? 'bad' : 'warn'}"></i><div><strong>${esc(i.title)}</strong><p>${esc(i.text)}</p>${i.href ? `<a href="${i.href}" data-bell-go>${esc(i.action || 'Aç')} →</a>` : ''}</div></li>`)
+                .join('')}</ul>`
+            : '<div class="bell-empty">✓ Her şey yolunda. Sorun ya da arıza yok.</div>'
+        }</div>`;
+    return `<div class="bell-wrap"><button class="theme-btn bell-btn ${worst}" type="button" data-bell aria-expanded="${!!state.bellOpen}" title="Bildirimler" aria-label="Bildirimler">${icon('bell')}${fresh ? `<span class="bell-badge num">${fresh}</span>` : worst ? '<span class="bell-dot"></span>' : ''}</button>${panel}</div>`;
+  }
+  function refreshBell() {
+    let w = document.querySelector('.bell-wrap');
+    if (w) w.outerHTML = bellButton();
+  }
+  function toggleBell(open) {
+    state.bellOpen = open ?? !state.bellOpen;
+    if (state.bellOpen) lsSet('np_seen_issues', JSON.stringify(issues().map((i) => i.id)));
+    refreshBell();
+  }
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-bell]')) return toggleBell();
+    if (e.target.closest('[data-bell-go]')) return toggleBell(false);
+    if (state.bellOpen && !e.target.closest('.bell-panel')) toggleBell(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && state.bellOpen) toggleBell(false);
+  });
   function offloadAlert() {
     return `<div class="alert offload-alert"><span class="offload-i">ⓘ</span><div><strong>Flow offloading açık</strong><p>Bu OpenWrt özelliği, kurulmuş bağlantıların paketlerini güvenlik duvarının yanından geçirerek işlemciyi rahatlatır. Ancak NetOS bu trafiği göremez: cihaz hızları ve kullanım istatistikleri eksik görünür, cihaz hız sınırları ve oyun önceliği çalışmaz.</p><p>Mini PC gibi güçlü bir işlemcide kapatmanız önerilir; zayıf bir router’da (ör. tek çekirdekli) 1 Gbit hızlarda açık kalması daha iyi olabilir.</p><div class="alert-actions"><button class="btn small primary" type="button" data-disable-offload>Kapat (önerilen)</button><button class="btn small" type="button" data-keep-offload>Açık kalsın</button></div></div></div>`;
   }
@@ -361,7 +431,7 @@
     return `<section class="card span-12">${cardHead('ethernet', 'Portlar')}<div class="port-grid">${tiles}</div>${warns.map((w) => `<div class="alert">⚠ ${w}</div>`).join('')}${virt ? '<p class="field-hint">Router sanal makinede çalışıyor: portlar sanal (virtio) olduğu için kablonun gerçek hızı burada görünmez; Proxmox’ta fiziksel ağ kartının hızına bakın. Ağ kartını sanal makineye doğrudan verirseniz (PCI passthrough) hız ve kablo durumu burada görünür.</p>' : '<p class="field-hint">Router’a takılı kabloların bağlantı hızı. Arkadaki cihazların (ör. bir switch’e bağlı PC) hızı yalnız o cihazın kendisinde görünür.</p>'}</section>`;
   }
   function home() {
-    let off = state.status.offload && !state.alertOff && !lsGet('np_offload_ok');
+    let off = state.status.offload && !state.alertOff && !lsGet('np_offload_ok') && onceBanner('np_offload_banner');
     let online = state.clients.filter((c) => c.online && !c.blocked),
       total = state.clients.length;
     let top = [...online].sort((a, b) => b.down + b.up - (a.down + a.up)).slice(0, 5);
@@ -1539,8 +1609,8 @@
   }
   // Router şifresizse her sayfanın üstünde uyarı
   function pwBanner() {
-    if (!state.xSec?.rootPwEmpty || state.page === '/welcome') return '';
-    return `<div class="alert alert-strong pw-banner"><div><strong>Router’ın şifresi yok!</strong><span>Aynı ağdaki herkes bu panele, LuCI’ye ve SSH’a şifresiz girebilir.</span></div><a class="btn small primary" href="#/welcome">Şimdi şifre belirle</a></div>`;
+    if (!state.xSec?.rootPwEmpty || state.page === '/welcome' || !onceBanner('np_pw_banner')) return '';
+    return `<div class="alert alert-strong pw-banner"><div><strong>Router’ın şifresi yok!</strong><span>Aynı ağdaki herkes bu panele, LuCI’ye ve SSH’a şifresiz girebilir.</span></div><a class="btn small primary" href="#/welcome">Şimdi şifre belirle</a><button class="btn small" type="button" data-banner-close="np_pw_banner">Sonra</button></div>`;
   }
   function securityCard() {
     let s = loadSec('/system');
@@ -2301,7 +2371,7 @@
     const top = document.querySelector('.top-status');
     if (!top) return;
     let connection = state.error ? '<span class="pill"><i class="dot bad"></i> Bağlantı sorunu</span>' : '';
-    top.innerHTML = `${connection}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${esc(state.overview?.hostname || 'NetOS')}</span>${langButton()}${themeButton()}`;
+    top.innerHTML = `${connection}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${esc(state.overview?.hostname || 'NetOS')}</span>${bellButton()}${langButton()}${themeButton()}`;
   }
   function updateHomeLive() {
     let fresh = home();
@@ -2541,6 +2611,14 @@
         state.page = '/devices';
         render();
       }
+      return;
+    }
+    if (b.matches('[data-banner-close]')) {
+      let k = b.dataset.bannerClose;
+      state.bannerOnce = { ...state.bannerOnce, [k]: { closed: true } };
+      lsSet(k, '1');
+      render();
+      toast('Uyarı üstteki zile taşındı.');
       return;
     }
     if (b.matches('[data-keep-offload]')) {

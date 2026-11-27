@@ -419,6 +419,21 @@ window.NETOS_EN = {
   "Port bulunamadı": "Port not found",
   "Port seçilmeli": "A port must be selected",
   "Güvenlik duvarında wan bölgesi yok": "The firewall has no wan zone",
+  "Bildirimler": "Notifications",
+  "# uyarı": "# alerts",
+  "✓ Her şey yolunda. Sorun ya da arıza yok.": "✓ All good. No problems or faults.",
+  "Router’a ulaşılamıyor": "Can’t reach the router",
+  "Veriler güncellenemiyor; bağlantıyı kontrol edin.": "Data can’t be refreshed; check the connection.",
+  "Router’ın şifresi yok": "The router has no password",
+  "Şifre belirle": "Set password",
+  "Bu internet hattından bağlantı yok; modemi ve kabloyu kontrol edin.": "No connection on this internet line; check the modem and cable.",
+  "Onay bekleyen adres değişikliği": "Address change awaiting confirmation",
+  "Yeni router adresini onaylamazsanız eski ayara dönülecek.": "If you don’t confirm the new router address, the old setting comes back.",
+  "Cihaz hızları, hız sınırları ve oyun önceliği tam çalışmaz.": "Device speeds, speed limits and gaming priority don’t fully work.",
+  "Genelde kablo ya da karşı cihaz sorunudur ve hızı düşürür.": "Usually a cable or peer device problem; it lowers speed.",
+  "Sonra": "Later",
+  "Uyarı üstteki zile taşındı.": "Alert moved to the bell at the top.",
+  "Aç": "Open",
 };
 
 /* Parça çevirileri: tam eşleşme yoksa metnin içinde geçen bu parçalar değiştirilir (değişken içeren metinler için). Uzundan kısaya uygulanır. */
