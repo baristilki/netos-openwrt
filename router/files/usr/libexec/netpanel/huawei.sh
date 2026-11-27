@@ -52,12 +52,14 @@ xor_hex() {
 		}
 	}'
 }
+# Huawei'nin CryptoJS'i HmacSHA256(mesaj, anahtar) sırasıyla çağrılır: ClientKey = HMAC(anahtar="Client Key",
+# mesaj=SaltedPassword), Signature = HMAC(anahtar=AuthMessage, mesaj=StoredKey) — standart SCRAM'in tersi.
 client_proof() { # pass salthex iter firstnonce servernonce
 	local sp ck sk sig
 	sp=$(pbkdf2_hex "$1" "$2" "$3")
-	ck=$(printf 'Client Key' | hmac_hex "$sp")
+	ck=$(hex2bin "$sp" | hmac_hex "$(printf 'Client Key' | tohex)")
 	sk=$(hex2bin "$ck" | sha256_hex)
-	sig=$(printf '%s' "$4,$5,$5" | hmac_hex "$sk")
+	sig=$(hex2bin "$sk" | hmac_hex "$(printf '%s' "$4,$5,$5" | tohex)")
 	xor_hex "$ck" "$sig"
 }
 

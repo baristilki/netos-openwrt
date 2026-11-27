@@ -100,7 +100,7 @@ NetOS → Entegrasyon menüsünden ihtiyacınız olanı açın; kapalı olanlar 
 
 | Entegrasyon | Ne yapar | Durum |
 |---|---|---|
-| Huawei WiFi AX2 / WS5200 | Wi-Fi aç/kapa, ağ adı, şifre, kanal, kanal analizi, misafir ağı | Hazır (misafir ağı gerçek cihazda henüz denenmedi) |
+| Huawei WiFi AX2 / WS5200 | Wi-Fi aç/kapa, ağ adı, şifre, kanal, kanal analizi, misafir ağı | Hazır (AX2 + OpenWrt 25.12 üzerinde doğrulandı; misafir ağını değiştirme henüz denenmedi) |
 | AdGuard Home | Tek tıkla kurulum; tüm ağda reklam engelleme, cihaz başına YouTube/TikTok engeli, güvenli arama | Hazır |
 | WireGuard VPN | VPN sunucusu, cihaz başına QR kod | Hazır |
 | Cloudflare Tunnel | Port açmadan dışarıdan erişim, DNS + Access otomatik kurulum | Hazır |
