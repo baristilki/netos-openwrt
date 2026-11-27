@@ -2231,21 +2231,21 @@ input.field {
   margin-top: 4px;
 }
 
-/* Orta genişlikte cihaz tablosu 8 sütuna sığmıyor: MAC sütununu gizle (cihaz panelinde görünür) */
+/* Orta genişlikte cihaz tablosu sığmıyor: önce MAC, sonra Ağ sütunu gizlenir (ikisi de cihaz panelinde görünür) */
 @media (max-width: 1280px) {
-  .device-table th:nth-child(5),
-  .device-table td:nth-child(5) {
-    display: none;
-  }
-}
-@media (max-width: 1100px) {
   .device-table th:nth-child(6),
   .device-table td:nth-child(6) {
     display: none;
   }
 }
+@media (max-width: 1440px) {
+  .device-table th:nth-child(7),
+  .device-table td:nth-child(7) {
+    display: none;
+  }
+}
 /* Canlı hız hücresi: her yön (↓ / ↑) tek satırda kalsın */
-.device-table td:nth-child(7) {
+.device-table td:nth-child(8) {
   white-space: nowrap;
 }
 
@@ -2829,4 +2829,35 @@ input.field {
   .hw-wifi-row { flex-wrap: wrap; }
   .hw-wifi-row .wifi-info { flex: 1 1 calc(100% - 60px); }
   .hw-wifi-row .wifi-right { width: 100%; justify-content: flex-end; }
+}
+
+/* ── Cihaz tablosu: erişim noktası sütunu, ping ve web düğmeleri ── */
+.via-tag { display: inline-flex; align-items: center; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 650; white-space: nowrap; background: var(--surface-2); color: var(--muted); border: 1px solid var(--line); }
+.via-tag.huawei { color: var(--red); background: var(--red-bg); border-color: transparent; }
+.via-tag.tplink { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+.actions-cell { width: 1%; white-space: nowrap; }
+.row-actions { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; }
+.icon-btn { width: 32px; height: 32px; display: inline-grid; place-items: center; border-radius: 9px; border: 1px solid var(--line); background: var(--surface-2); color: var(--muted); cursor: pointer; padding: 0; text-decoration: none; transition: color .15s, background .15s; }
+.icon-btn:hover:not([disabled]) { color: var(--accent); background: var(--accent-soft); }
+.icon-btn[disabled] { opacity: .4; cursor: default; }
+.icon-btn svg { width: 16px; height: 16px; }
+.icon-btn.ghost { visibility: hidden; }
+.ping-res { font-size: 11px; font-weight: 650; min-width: 52px; text-align: right; color: var(--muted); }
+.ping-res.ok { color: var(--green); }
+.ping-res.bad { color: var(--red); }
+.device-card-meta .row-actions { margin-left: auto; }
+
+/* ── Büyük ekranlar (2K / 4K): içerik ve yan paneller ekranla orantılı büyür ──
+   Ölçüler px olduğu için 'zoom' ile tüm iç kutular (yazı, boşluk, grafik) birlikte büyür. */
+@media (min-width: 1900px) {
+  .content { max-width: 1320px; zoom: 1.12; }
+  .drawer, .bell-panel { zoom: 1.08; }
+}
+@media (min-width: 2300px) {
+  .content { max-width: 1380px; zoom: 1.25; }
+  .drawer, .bell-panel { zoom: 1.15; }
+}
+@media (min-width: 3200px) {
+  .content { max-width: 1440px; zoom: 1.5; }
+  .drawer, .bell-panel { zoom: 1.35; }
 }

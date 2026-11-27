@@ -461,6 +461,12 @@
       (b.online - a.online) || a.displayName.localeCompare(b.displayName, 'tr', { sensitivity: 'base' }));
   }
 
+  // yerel cihaza ping -> { received (0-3), avgMs | null }
+  async function pingHost(ip) {
+    if (!validate.ip(ip)) throw new ApiError('Geçersiz IP adresi', 'validate');
+    const r = await npCall('ping_host', { ip });
+    return { received: +r.received || 0, avgMs: r.avg_ms == null ? null : +r.avg_ms };
+  }
   async function setClient(mac, patch) {
     const a = { mac };
     if (patch.name != null) {
@@ -860,6 +866,11 @@
   async function getApps(days = 7, mac = '') {
     const r = await npCall('apps_get', { days, mac });
     return { source: r.source || 'ports', services: r.services || [], devices: r.devices || {} };
+  }
+  // hattı uzun süre zorlayan cihazlar -> [{ mac, name, kinds['download'|'upload'|'connections'], since(ms), down, up (Mbit/s), conns, top }]
+  async function getHeavy() {
+    const r = await npCall('apps_heavy', {});
+    return (r.items || []).map((x) => ({ ...x, since: (x.since || 0) * 1000 }));
   }
   async function getUsage(days = 31) {
     const r = await npCall('usage_get', { days });
@@ -1830,6 +1841,8 @@
         return { ok: true };
       },
       'netpanel.usage_get': (a) => ({ days: demoUsage.slice(0, a.days || 31) }),
+      'netpanel.ping_host': (a) => (/\.(2|3|10)$/.test(a.ip) ? { ok: true, received: 3, avg_ms: 1 + (a.ip.length % 7) * 1.3 } : { ok: true, received: 0, avg_ms: null }),
+      'netpanel.apps_heavy': () => ({ items: [{ mac: '2c:f0:5d:11:22:12', name: 'DESKTOP-OYUN', kinds: ['upload'], since: nowSec() - 34 * 60, down: 3.1, up: 38.4, conns: 212, top: 'Web (diğer)' }] }),
       'netpanel.apps_get': (a) => {
         const G = 1e9, k = Math.min(a.days || 7, 30) / 7;
         const per = {
@@ -2072,7 +2085,7 @@
     getHuawei, setHuaweiWifi, setHuaweiConfig, getHuaweiWifi, saveHuaweiWifi, scanHuaweiChannels, WIFI_CHANNELS: CHANNELS,
     getWans: () => getWans(), getSystem, changePassword, scanWeb,
     getWanConfig, setWan, setWanMode, getPorts, addWan, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
-    getUsage, getApps, getPingHistory, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
+    getUsage, getApps, getHeavy, getPingHistory, pingHost, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
     getPortForwards, savePortForward, deletePortForward, setUpnp, setFirewall, getConnections, getLan, setLan, confirmLan, revertLan,
     getGuestWifi, setGuestWifi, extendGuestWifi, getGuestQr, getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,

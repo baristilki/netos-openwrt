@@ -40,7 +40,9 @@
 					"tp_status",
 					"conn_list",
 					"auth_list",
-					"hw_guest_get"
+					"hw_guest_get",
+					"ping_host",
+					"apps_heavy"
 				],
 				"system": [
 					"board",

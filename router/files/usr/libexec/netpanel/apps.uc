@@ -2,6 +2,8 @@
 // NetOS — uygulama (servis) bazlı trafik
 //   collect            -> (cron, dakikada bir) bağlantı tablosundaki bayt sayaçlarını cihaz × servis olarak topla
 //   get {days, mac}     -> son N günün toplamları: { source, services[], devices{mac: services[]} }
+//   heavy               -> hattı uzun süre zorlayan cihazlar: { items[{mac, name, kinds[], since, down, up, conns, top}] }
+//                          eşikler: netpanel.heavy.{down (Mbit/s, 50), up (Mbit/s, 10), conns (600), minutes (20)}
 //
 // Nasıl çalışır:
 //   1. AdGuard Home'un sorgu günlüğünden (DNS) hangi IP'nin hangi alan adına ait olduğu öğrenilir
@@ -163,6 +165,65 @@ function flush(d, acc) {
 	wjson(p, all);
 }
 
+// ── yoğun kullanım: son N dakikada sürekli yüksek indirme/yükleme ya da çok fazla bağlantı ──
+function heavyCfg(k, d) { const v = int(ctx.get('netpanel', 'heavy', k) ?? d); return v > 0 ? v : d; }
+function devName(mac) {
+	const n = ctx.get('netpanel', 'm_' + replace(mac, ':', ''), 'name');
+	if (n) return n;
+	for (let l in split(fs.readfile('/tmp/dhcp.leases') ?? '', '\n')) {
+		const f = split(l, ' ');
+		if (lc(f[1] ?? '') == mac && f[3] && f[3] != '*') return f[3];
+	}
+	return uc(mac);
+}
+function detect(mt, dt) {
+	if (dt < 20 || dt > 600) return;   // dakikalık ölçüm dışı (ilk/uzun ara) sayılmaz
+	const win = heavyCfg('minutes', 20) * 60, thD = heavyCfg('down', 50), thU = heavyCfg('up', 10), thC = heavyCfg('conns', 600);
+	let hist = rjson(RUN + '/hist.json', {}), heavy = rjson(RUN + '/heavy.json', {});
+	for (let mac in mt) {
+		const m = mt[mac];
+		let top = null, tb = 0;
+		for (let s in m[3]) if (m[3][s] > tb) { tb = m[3][s]; top = s; }
+		push(hist[mac] ??= [], [NOW, m[0] * 8 / dt / 1e6, m[1] * 8 / dt / 1e6, m[2], top]);
+	}
+	for (let mac in hist) {
+		hist[mac] = filter(hist[mac], (x) => NOW - x[0] <= win + 90);
+		if (!length(hist[mac])) { delete hist[mac]; continue; }
+		const h = hist[mac], n = length(h);
+		// pencerenin en az %75'i ölçülmüş olmalı (kısa ani yüklemeler sayılmaz)
+		const full = n >= int(win / 60 * 0.75) && NOW - h[0][0] >= win * 0.75;
+		let sd = 0, su = 0, cmin = 1e9, tops = {};
+		for (let x in h) { sd += x[1]; su += x[2]; if (x[3] < cmin) cmin = x[3]; if (x[4]) tops[x[4]] = (tops[x[4]] ?? 0) + 1; }
+		const ad = sd / n, au = su / n;
+		const last5 = slice(h, -5);
+		const cm5 = length(last5) >= 5 ? min(...map(last5, (x) => x[3])) : 0;
+		let kinds = [];
+		if (full && ad >= thD) push(kinds, 'download');
+		if (full && au >= thU) push(kinds, 'upload');
+		if (cm5 >= thC) push(kinds, 'connections');
+		let top = null, tc = 0;
+		for (let s in tops) if (tops[s] > tc) { tc = tops[s]; top = s; }
+		if (length(kinds)) {
+			const was = heavy[mac];
+			heavy[mac] = { kinds, since: was?.since ?? h[0][0], down: int(ad * 10 + 0.5) / 10, up: int(au * 10 + 0.5) / 10, conns: h[n - 1][3], top, notified: was?.notified ?? false, name: devName(mac) };
+			if (!heavy[mac].notified) {
+				heavy[mac].notified = true;
+				const k = join(', ', map(kinds, (x) => ({ download: 'yüksek indirme (' + heavy[mac].down + ' Mbit/s)', upload: 'yüksek yükleme (' + heavy[mac].up + ' Mbit/s)', connections: 'çok fazla bağlantı (' + heavy[mac].conns + ')' })[x]));
+				const msg = heavy[mac].name + ' hattı uzun süredir yoğun kullanıyor: ' + k + (top ? ', çoğu ' + top : '');
+				system('(. /usr/share/netpanel/common.sh; np_notify ' + q(msg) + ' system) >/dev/null 2>&1 &');
+				system('logger -t netos ' + q('yoğun kullanım: ' + msg));
+			}
+		} else if (heavy[mac]) delete heavy[mac];
+	}
+	for (let mac in heavy) if (!hist[mac]) delete heavy[mac];
+	wjson(RUN + '/hist.json', hist);
+	wjson(RUN + '/heavy.json', heavy);
+}
+function heavyList() {
+	const h = rjson(RUN + '/heavy.json', {});
+	out({ items: map(sort(keys(h), (a, b) => h[a].since - h[b].since), (m) => ({ mac: m, ...h[m], notified: undefined })) });
+}
+
 function collect() {
 	fs.mkdir(RUN); fs.mkdir(DATA);
 	let meta = rjson(RUN + '/meta.json', {});
@@ -174,6 +235,7 @@ function collect() {
 
 	const macs = localIps();
 	let cur = {}, acc = rjson(RUN + '/acc.json', {});
+	let mt = {};   // bu dakika: mac -> [indirme, yükleme, bağlantı sayısı, {servis: bayt}]
 	const today = day(NOW);
 	if (meta.day && meta.day != today) { flush(meta.day, acc); acc = {}; }
 	meta.day = today;
@@ -196,17 +258,22 @@ function collect() {
 		if (!mac || length(b) < 2 || macs[dst]) continue;   // yalnız yerel cihaz -> internet
 		const key = join('|', [proto, src, dst, sport, dport]);
 		cur[key] = b;
+		const m = (mt[mac] ??= [0, 0, 0, {}]);
+		m[2]++;
 		const p = prev[key] ?? [0, 0];
 		let up = b[0] - p[0], down = b[1] - p[1];
 		if (up < 0 || down < 0) { up = b[0]; down = b[1]; }   // aynı anahtarla yeni bağlantı
 		if (first || up + down == 0) continue;
 		const svc = ipmap[dst]?.[0] ?? portGuess(proto, dport);
+		m[0] += down; m[1] += up; m[3][svc] = (m[3][svc] ?? 0) + down + up;
 		const d = (acc[mac] ??= {});
 		const r = (d[svc] ??= [0, 0]);
 		r[0] += down; r[1] += up;
 	}
 	wjson(RUN + '/ct.json', cur);
 	wjson(RUN + '/ipmap.json', ipmap);
+	if (!first) detect(mt, NOW - (meta.last ?? (NOW - 60)));
+	meta.last = NOW;
 	// /etc'ye 5 dakikada bir yaz (flash yıpranmasın); ara toplam /tmp'de
 	if (NOW - (meta.flushed ?? 0) >= 300) { flush(today, acc); acc = {}; meta.flushed = NOW; }
 	wjson(RUN + '/acc.json', acc);
@@ -249,5 +316,6 @@ function get() {
 switch (ARGV[0]) {
 case 'collect': collect(); break;
 case 'get': get(); break;
+case 'heavy': heavyList(); break;
 default: out({ ok: false, error: 'collect | get' });
 }

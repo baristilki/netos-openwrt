@@ -155,7 +155,10 @@
     }
   }
   function route() {
+    let prevPage = state.page || '';
     state.page = location.hash.slice(1) || '/';
+    // cihaz listesinin sırası sayfaya yeniden girildiğinde tazelenir (cihaz paneli açıp kapamak sırayı bozmaz)
+    if (state.page.startsWith('/devices') && !prevPage.startsWith('/devices')) state.devOrder = null;
     state.drawerMac = null;
     state.drawerWifi = null;
     state.xPanel = null;
@@ -329,6 +332,16 @@
     if (NP.hasSession() && !state.xNewdev && !state.xNewdevError) loadX('xNewdev', () => NP.getNewDevices(), '-');
     let nd = (state.xNewdev?.items || []).filter((x) => x.unseen);
     if (nd.length) out.push({ id: 'newdev:' + nd.map((x) => x.mac).join(','), level: 'warn', title: `${nd.length} yeni cihaz ağa katıldı`, text: nd.slice(0, 3).map((x) => x.hostname || NP.fmt.mac(x.mac)).join(', ') + (nd.length > 3 ? '…' : ''), href: '#/devices', action: 'Cihazlar' });
+    if (NP.hasSession() && (!state.xHeavyT || Date.now() - state.xHeavyT > 60000)) {
+      state.xHeavyT = Date.now();
+      NP.getHeavy().then((h) => { state.xHeavy = h; refreshBell(); }).catch(() => {});
+    }
+    for (let h of state.xHeavy || []) {
+      let mins = Math.max(1, Math.round((Date.now() - h.since) / 60000)),
+        what = h.kinds.map((k) => ({ download: `↓ ${h.down} Mbit/s`, upload: `↑ ${h.up} Mbit/s`, connections: `${h.conns} bağlantı` })[k]).join(' · ');
+      let c = state.clients.find((x) => x.mac === h.mac);
+      out.push({ id: 'heavy:' + h.mac + ':' + h.since, level: 'warn', title: `${c?.displayName || h.name} hattı yoğun kullanıyor`, text: `${mins} dakikadır ${what}${h.top ? ' · çoğu ' + h.top : ''}. Beklenmiyorsa cihazı kontrol edin (yedekleme, torrent, güncelleme ya da zararlı yazılım olabilir).`, href: '#/devices/' + encodeURIComponent(h.mac), action: 'Cihazı aç' });
+    }
     if (state.lanPending) out.push({ id: 'lan', level: 'warn', title: 'Onay bekleyen adres değişikliği', text: 'Yeni router adresini onaylamazsanız eski ayara dönülecek.', href: '#/lan', action: 'Yerel ağ' });
     if (state.status?.offload) out.push({ id: 'offload', level: 'warn', title: 'Flow offloading açık', text: 'Cihaz hızları, hız sınırları ve oyun önceliği tam çalışmaz.', href: '#/system', action: 'Sistem' });
     for (let pt of state.xPorts?.ports || []) {
@@ -378,6 +391,25 @@
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && state.bellOpen) toggleBell(false);
   });
+  document.addEventListener('click', async (e) => {
+    let b = e.target.closest('[data-ping]');
+    if (!b) return;
+    e.preventDefault();
+    e.stopPropagation();
+    let mac = b.dataset.ping, c = state.clients.find((x) => x.mac === mac);
+    if (!c?.ip) return;
+    state.pingRes = { ...state.pingRes, [mac]: { busy: true } };
+    if (state.page === '/devices') updateDevicesLive();
+    try {
+      let r = await NP.pingHost(c.ip);
+      state.pingRes[mac] = r;
+      toast(r.received ? `${c.displayName}: yanıt veriyor${r.avgMs != null ? ' (' + Math.round(r.avgMs) + ' ms)' : ''}` : `${c.displayName}: yanıt vermiyor`);
+    } catch (x) {
+      state.pingRes[mac] = { received: 0, avgMs: null };
+      toast(x.message);
+    }
+    if (state.page === '/devices') updateDevicesLive();
+  }, true);
   document.addEventListener('change', (e) => {
     if (!e.target.matches('[data-x-amac]')) return;
     state.stats.amac = e.target.value;
@@ -465,9 +497,27 @@
     return `${c.schedBlocked ? '<span class="badge err">Plan: internet kapalı</span>' : c.schedule?.length ? '<span class="badge">Saat planı</span>' : ''}${c.static ? '<span class="badge ok">Sabit IP</span>' : ''}${c.staticPending ? '<span class="badge warn">IP bekliyor</span>' : ''}${c.priority ? '<span class="badge ok">Öncelikli</span>' : ''}${c.wan ? `<span class="badge">${c.wan.endsWith('!') ? 'Yalnız' : 'Hat'}: ${esc(c.wan.replace(/!$/, ''))}</span>` : ''}${c.limitDown || c.limitUp ? `<span class="badge warn">S&#305;n&#305;r &#8595;${c.limitDown || '&#8734;'} &#8593;${c.limitUp || '&#8734;'}</span>` : ''}${c.blocked ? '<span class="badge err">Engelli</span>' : ''}`;
   }
   function signal(c) {
-    return `<span class="conn-badge">${c.conn === 'wifi' ? icon('wifi') : icon('ethernet')}${esc(c.connLabel || (c.conn === 'wifi' ? 'Wi-Fi' : 'Ethernet'))}</span>${c.via === 'huawei' ? '<span class="badge">Huawei</span>' : ''}`;
+    return `<span class="conn-badge">${c.conn === 'wifi' ? icon('wifi') : icon('ethernet')}${esc(c.connLabel || (c.conn === 'wifi' ? 'Wi-Fi' : 'Ethernet'))}</span>`;
+  }
+  // cihaz hangi erişim noktası üzerinden bağlı
+  const viaLabel = (c) => (c.via === 'huawei' ? 'Huawei' : c.via === 'tplink' ? 'TP-Link' : 'Router');
+  function rowActions(c, web) {
+    let p = state.pingRes?.[c.mac];
+    return `<div class="row-actions">${p ? `<span class="ping-res ${p.busy ? '' : p.received ? 'ok' : 'bad'}">${p.busy ? '…' : p.received ? `${p.avgMs != null ? Math.round(p.avgMs) + ' ms' : 'yanıt var'}` : 'yanıt yok'}</span>` : ''}<button class="icon-btn" type="button" data-ping="${esc(c.mac)}" title="Ping at: cihaz yanıt veriyor mu?" aria-label="Ping at" ${c.ip ? '' : 'disabled'}>${icon('radar')}</button>${web.length ? `<a class="icon-btn" href="${esc(web[0])}" target="_blank" rel="noopener" title="Web arayüzünü aç" aria-label="Web arayüzünü aç" onclick="event.stopPropagation()">${icon('globe')}</a>` : '<span class="icon-btn ghost" aria-hidden="true"></span>'}</div>`;
+  }
+  // Liste sırası sabit kalsın: çevrimiçi/çevrimdışı durumu saniyelik değişse de satırlar zıplamasın.
+  // Sıra sayfaya girildiğinde ve 30 dakikada bir yeniden hesaplanır; yeni cihazlar sona eklenir.
+  function stableOrder(list) {
+    let o = state.devOrder;
+    if (!o || Date.now() - o.t > 30 * 60 * 1000) o = state.devOrder = { t: Date.now(), idx: Object.fromEntries(state.clients.map((c, i) => [c.mac, i])) };
+    let n = Object.keys(o.idx).length;
+    for (let c of list) if (!(c.mac in o.idx)) o.idx[c.mac] = n++;
+    return list.slice().sort((a, b) => o.idx[a.mac] - o.idx[b.mac]);
   }
   function filtered() {
+    return stableOrder(filteredRaw());
+  }
+  function filteredRaw() {
     let q = state.query.toLocaleLowerCase('tr');
     return state.clients.filter(
       (c) =>
@@ -493,12 +543,12 @@
   function deviceRow(c) {
     let i = findIface(c),
       web = (c.web || []).filter((u) => /^https?:\/\//i.test(u));
-    return `<tr data-client="${esc(c.mac)}"><td><span class="status-cell"><i class="dot ${c.blocked ? 'bad' : c.online ? '' : 'off'}"></i>${c.blocked ? 'Engelli' : c.online ? '&#199;evrimi&#231;i' : '&#199;evrimd&#305;&#351;&#305;'}</span></td><td>${signal(c)}</td><td><div class="device-name-cell"><span class="type-icon">${typeIcon(c.type)}</span><span><div class="client-name">${esc(c.displayName)}</div><div class="client-host">${esc(c.hostname || '')}</div></span>${web.length ? `<a class="web-shortcut" href="${esc(web[0])}" target="_blank" rel="noopener" aria-label="Web aray&#252;z&#252;n&#252; a&#231;" onclick="event.stopPropagation()">&#8599;</a>` : ''}</div></td><td class="num">${esc(c.ip)}</td><td class="mac">${esc(NP.fmt.mac(c.mac))}</td><td>${esc(i?.label || c.iface || '—')}</td><td class="num">&#8595; ${esc(NP.fmt.bits(c.down))}<br>&#8593; ${esc(NP.fmt.bits(c.up))}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap">${badges(c)}</div></td></tr>`;
+    return `<tr data-client="${esc(c.mac)}"><td><span class="status-cell"><i class="dot ${c.blocked ? 'bad' : c.online ? '' : 'off'}"></i>${c.blocked ? 'Engelli' : c.online ? '&#199;evrimi&#231;i' : '&#199;evrimd&#305;&#351;&#305;'}</span></td><td>${signal(c)}</td><td><span class="via-tag ${esc(c.via || 'router')}">${viaLabel(c)}</span></td><td><div class="device-name-cell"><span class="type-icon">${typeIcon(c.type)}</span><span><div class="client-name">${esc(c.displayName)}</div><div class="client-host">${esc(c.hostname || '')}</div></span></div></td><td class="num">${esc(c.ip)}</td><td class="mac">${esc(NP.fmt.mac(c.mac))}</td><td>${esc(i?.label || c.iface || '—')}</td><td class="num">&#8595; ${esc(NP.fmt.bits(c.down))}<br>&#8593; ${esc(NP.fmt.bits(c.up))}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap">${badges(c)}</div></td><td class="actions-cell">${rowActions(c, web)}</td></tr>`;
   }
   function deviceCard(c) {
     let i = findIface(c),
       web = (c.web || []).filter((u) => /^https?:\/\//i.test(u));
-    return `<div class="device-card" data-client="${esc(c.mac)}"><div class="device-card-head"><span class="status-cell"><span class="type-icon">${typeIcon(c.type)}</span><i class="dot ${c.blocked ? 'bad' : c.online ? '' : 'off'}"></i><span class="client-name">${esc(c.displayName)}</span></span>${signal(c)}</div><div class="client-host">${esc(c.hostname || '')} · ${esc(c.ip)}</div><div class="device-card-meta"><span class="badge">${esc(i?.label || c.iface || '—')}</span>${badges(c)}<span class="badge">&#8595; ${esc(NP.fmt.bits(c.down))} &#8593; ${esc(NP.fmt.bits(c.up))}</span>${web.length ? `<a class="badge" href="${esc(web[0])}" target="_blank" rel="noopener" onclick="event.stopPropagation()">&#8599;</a>` : ''}</div></div>`;
+    return `<div class="device-card" data-client="${esc(c.mac)}"><div class="device-card-head"><span class="status-cell"><span class="type-icon">${typeIcon(c.type)}</span><i class="dot ${c.blocked ? 'bad' : c.online ? '' : 'off'}"></i><span class="client-name">${esc(c.displayName)}</span></span>${signal(c)}</div><div class="client-host">${esc(c.hostname || '')} · ${esc(c.ip)}</div><div class="device-card-meta"><span class="badge">${esc(i?.label || c.iface || '—')}</span><span class="via-tag ${esc(c.via || 'router')}">${viaLabel(c)}</span>${badges(c)}<span class="badge">&#8595; ${esc(NP.fmt.bits(c.down))} &#8593; ${esc(NP.fmt.bits(c.up))}</span>${rowActions(c, web)}</div></div>`;
   }
   function devices() {
     let list = filtered();
@@ -518,7 +568,7 @@
       )
       .join(
         '',
-      )}</select></div><div class="table-wrap"><table class="device-table"><thead><tr><th>Durum</th><th>Bağlantı</th><th>Cihaz</th><th>IP adresi</th><th>MAC adresi</th><th>Ağ</th><th>Canlı hız</th><th>Ayarlar</th></tr></thead><tbody id="device-rows">${list.map(deviceRow).join('')}</tbody></table></div><div class="mobile-devices" id="device-cards">${list.map(deviceCard).join('') || '<div class="empty">Bu filtrede cihaz bulunamadı.</div>'}</div></section>`;
+      )}</select></div><div class="table-wrap"><table class="device-table"><thead><tr><th>Durum</th><th>Bağlantı</th><th>Erişim</th><th>Cihaz</th><th>IP adresi</th><th>MAC adresi</th><th>Ağ</th><th>Canlı hız</th><th>Ayarlar</th><th><span class="sr-only">İşlemler</span></th></tr></thead><tbody id="device-rows">${list.map(deviceRow).join('')}</tbody></table></div><div class="mobile-devices" id="device-cards">${list.map(deviceCard).join('') || '<div class="empty">Bu filtrede cihaz bulunamadı.</div>'}</div></section>`;
   }
   function wifiPage() {
     let ow = (state.networks.wifi || [])

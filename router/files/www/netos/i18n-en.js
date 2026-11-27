@@ -489,10 +489,26 @@ window.NETOS_EN = {
   "Bağlanamadı": "Can’t connect",
   "Huawei’ye bağlandı ✓": "Connected to Huawei ✓",
   "Huawei’ye bağlanılamadı": "Couldn’t connect to Huawei",
+  "Erişim": "Access point",
+  "Ping at: cihaz yanıt veriyor mu?": "Ping: is the device responding?",
+  "Ping at": "Ping",
+  "yanıt yok": "no reply",
+  "yanıt var": "replied",
+  "# ms": "# ms",
+  "İşlemler": "Actions",
+  "Yalnız yerel ağdaki cihazlara ping atılabilir": "Only devices on the local network can be pinged",
 };
 
 /* Parça çevirileri: tam eşleşme yoksa metnin içinde geçen bu parçalar değiştirilir (değişken içeren metinler için). Uzundan kısaya uygulanır. */
 window.NETOS_EN_FRAG = {
+  " hattı yoğun kullanıyor": " is using the line heavily",
+  " dakikadır ": " min: ",
+  " bağlantı": " connections",
+  " · çoğu ": " · mostly ",
+  "Beklenmiyorsa cihazı kontrol edin (yedekleme, torrent, güncelleme ya da zararlı yazılım olabilir).": "If unexpected, check the device (backup, torrent, update or malware).",
+  "Cihazı aç": "Open device",
+  ": yanıt veriyor": ": responding",
+  ": yanıt vermiyor": ": not responding",
   "Önce ": "Prefer ",
   " (koparsa diğer hat)": " (fall back to the other line)",
   "Yalnız ": "Only ",
