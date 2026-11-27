@@ -30,9 +30,10 @@ BASE="http://$HOST/cgi-bin/luci/;stok="
 ERR=""
 dbg() { echo "$(date +%T) $*" >>"$D/debug"; }
 
-tohex() { od -An -tx1 | tr -d ' \n'; }
+# bazı OpenWrt derlemelerinde busybox 'od' yok: hexdump'a düş
+tohex() { if command -v od >/dev/null; then od -An -tx1 | tr -d ' \n'; else hexdump -v -e '/1 "%02x"'; fi; }
 md5_hex() { printf '%s' "$1" | md5sum | cut -d' ' -f1; }
-rand16() { od -An -tu1 -N48 /dev/urandom | tr -dc '0-9' | head -c 16; }
+rand16() { if command -v od >/dev/null; then od -An -tu1 -N48 /dev/urandom; else hexdump -v -n 48 -e '/1 "%u"' /dev/urandom; fi | tr -dc '0-9' | head -c 16; }
 
 # n,e (hex) -> PEM
 pem_from() { # n e çıktı
@@ -53,7 +54,7 @@ rsa_hex() { # metin pem anahtar_bayt
 }
 aes_enc() { printf '%s' "$1" | openssl enc -aes-128-cbc -K "$(printf '%s' "$AESK" | tohex)" -iv "$(printf '%s' "$AESI" | tohex)" -A -a 2>/dev/null; }
 aes_dec() { printf '%s' "$1" | openssl enc -d -aes-128-cbc -K "$(printf '%s' "$AESK" | tohex)" -iv "$(printf '%s' "$AESI" | tohex)" -A -a 2>/dev/null; }
-urlenc() { printf '%s' "$1" | od -An -tx1 | tr -d '\n' | sed 's/ /%/g'; }
+urlenc() { printf '%s' "$1" | tohex | sed 's/../%&/g'; }
 
 post() { # yol gövde -> yanıt
 	curl -s -m 10 -b "$JAR" -c "$JAR" -H 'Content-Type: application/x-www-form-urlencoded' \

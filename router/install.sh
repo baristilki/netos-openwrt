@@ -38,7 +38,7 @@ touch /etc/crontabs/root
 grep -qF "/usr/libexec/netpanel/collect.sh" /etc/crontabs/root || echo "$CRON" >>/etc/crontabs/root
 # günlük güncelleme kontrolü (04:3x, cihazlar aynı anda GitHub'a gitmesin diye rastgele dakika)
 grep -qF "/usr/libexec/netpanel/update.sh" /etc/crontabs/root ||
-	echo "3$(( $(head -c1 /dev/urandom | od -An -tu1) % 10 )) 4 * * * /usr/libexec/netpanel/update.sh cron >/dev/null 2>&1" >>/etc/crontabs/root
+	echo "3$(awk 'BEGIN { srand(); print int(rand() * 10) }') 4 * * * /usr/libexec/netpanel/update.sh cron >/dev/null 2>&1" >>/etc/crontabs/root
 /etc/init.d/cron enable
 /etc/init.d/cron restart
 # yeni cihaz bildirimi: şu an ağda olan cihazları "bilinen" say (kurulumda bildirim yağmasın)

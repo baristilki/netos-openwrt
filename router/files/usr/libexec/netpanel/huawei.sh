@@ -26,7 +26,8 @@ fi
 cfg() { uci -q get "netpanel.huawei.$1"; }
 
 # ── kripto yardımcıları (openssl) ───────────────────────────────────────────
-tohex() { od -An -tx1 | tr -d ' \n'; }
+# bazı OpenWrt derlemelerinde busybox 'od' yok: hexdump'a düş
+tohex() { if command -v od >/dev/null; then od -An -tx1 | tr -d ' \n'; else hexdump -v -e '/1 "%02x"'; fi; }
 hex2bin() {
 	# printf formatı yalnızca \ooo kaçışlarından oluşur
 	printf "$(printf '%s' "$1" | awk '{
