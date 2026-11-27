@@ -2788,3 +2788,11 @@ input.field {
 .bell-empty { padding: 18px 14px; color: var(--green); font-size: 13px; }
 .dot.warn { background: var(--amber); }
 @media (max-width: 760px) { .bell-panel { position: fixed; top: 60px; right: 16px; left: 16px; width: auto; } }
+
+/* Wi-Fi satırları dar kartta taşmasın: ad kısalır, sağdaki anahtar kart içinde kalır */
+.wifi-list, .wifi-group, .wifi-row { min-width: 0; }
+.wifi-right { flex: none; }
+.wifi-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wifi-list { container-type: inline-size; }
+@container (max-width: 360px) { .wifi-right .pill { display: none; } .wifi-row { gap: 10px; padding: 11px; } }
+.grid > * { min-width: 0; }
