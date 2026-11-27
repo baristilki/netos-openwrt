@@ -188,6 +188,7 @@ all)
 	/usr/libexec/netpanel/authguard.sh scan
 	usage
 	ping_hist
+	ucode /usr/libexec/netpanel/apps.uc collect >/dev/null 2>&1
 	;;
 esac
 exit 0

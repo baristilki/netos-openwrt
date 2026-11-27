@@ -64,6 +64,7 @@
       x: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m18 6-12 12M6 6l12 12"/></svg>',
       chart:
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/></svg>',
+      apps: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="6" height="6" rx="1.5"/><rect x="14" y="4" width="6" height="6" rx="1.5"/><rect x="4" y="14" width="6" height="6" rx="1.5"/><rect x="14" y="14" width="6" height="6" rx="1.5"/></svg>',
       bell: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4zM10 20a2 2 0 0 0 4 0"/></svg>',
       cloud:
         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 18h10a4 4 0 0 0 .5-7.97A6 6 0 0 0 6 9a4.5 4.5 0 0 0 1 9z"/></svg>',
@@ -375,6 +376,12 @@
   });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && state.bellOpen) toggleBell(false);
+  });
+  document.addEventListener('change', (e) => {
+    if (!e.target.matches('[data-x-amac]')) return;
+    state.stats.amac = e.target.value;
+    state.xApps = null;
+    render();
   });
   function offloadAlert() {
     return `<div class="alert offload-alert"><span class="offload-i">ⓘ</span><div><strong>Flow offloading açık</strong><p>Bu OpenWrt özelliği, kurulmuş bağlantıların paketlerini güvenlik duvarının yanından geçirerek işlemciyi rahatlatır. Ancak NetOS bu trafiği göremez: cihaz hızları ve kullanım istatistikleri eksik görünür, cihaz hız sınırları ve oyun önceliği çalışmaz.</p><p>Mini PC gibi güçlü bir işlemcide kapatmanız önerilir; zayıf bir router’da (ör. tek çekirdekli) 1 Gbit hızlarda açık kalması daha iyi olabilir.</p><div class="alert-actions"><button class="btn small primary" type="button" data-disable-offload>Kapat (önerilen)</button><button class="btn small" type="button" data-keep-offload>Açık kalsın</button></div></div></div>`;
@@ -727,14 +734,53 @@
   /* ── İstatistik sayfası ── */
   function statsPage() {
     let st = (state.stats = state.stats || { days: 30, hours: 24 });
+    st.adays ??= 7;
+    st.amac ??= '';
+    if (!state.xApps && !state.xAppsError) loadX('xApps', () => NP.getApps(st.adays, st.amac), '/stats');
     if (!state.xUsage && !state.xUsageError) loadX('xUsage', () => NP.getUsage(st.days), '/stats');
     if (!state.xPing && !state.xPingError) loadX('xPing', () => NP.getPingHistory(st.hours), '/stats');
     let seg = (name, cur, opts) =>
       `<div class="seg">${opts.map(([v, l]) => `<button class="seg-btn${cur === v ? ' active' : ''}" data-x-${name}="${v}">${l}</button>`).join('')}</div>`;
     return `${pageHead('Kullanım', 'İstatistik', 'Cihaz başına trafik ve hat kalitesi geçmişi.')}<div class="grid stats-grid">
       <section class="card span-12">${cardHead('chart', 'Trafik', seg('days', st.days, [[7, '7 gün'], [30, '30 gün']]))}${usageBody()}</section>
+      <section class="card span-12">${cardHead('apps', 'Uygulamalar', `<div class="apps-head">${appsDevSelect()}${seg('adays', st.adays, [[1, 'Bugün'], [7, '7 gün'], [30, '30 gün']])}</div>`)}${appsBody()}</section>
       <section class="card span-12">${cardHead('speed', 'Hat kalitesi (ping / kayıp)', seg('hours', st.hours, [[24, '24 saat'], [168, '7 gün']]))}${pingBody()}</section>
     </div>`;
+  }
+  /* ── Uygulama bazlı trafik ── */
+  const APP_COLORS = { YouTube: '#e5484d', Netflix: '#c4242b', 'Disney+': '#2f5bd3', 'Prime Video': '#1a98ff', Twitch: '#8f5cf6', Spotify: '#1db954', TikTok: '#25c2c9', Instagram: '#d6409f', Facebook: '#3b6fd8', WhatsApp: '#25b863', Discord: '#5865f2', Steam: '#3a6ea5', 'Windows Update': '#2b88d8', Microsoft: '#2b88d8', Apple: '#8e8e93', Google: '#4285f4', Zoom: '#2d8cff' };
+  const appColor = (n) => APP_COLORS[n] || (/^(Web|Diğer|DNS)/.test(n) ? 'var(--muted)' : 'var(--accent)');
+  function appsDevSelect() {
+    let st = state.stats,
+      macs = Object.keys(state.xApps?.devices || {});
+    if (st.amac && !macs.includes(st.amac)) macs.unshift(st.amac);
+    return `<select class="field apps-dev" data-x-amac aria-label="Cihaz"><option value="">Tüm cihazlar</option>${macs.map((m) => `<option value="${esc(m)}" ${st.amac === m ? 'selected' : ''}>${esc(nameOf(m))}</option>`).join('')}</select>`;
+  }
+  function appsBody() {
+    if (state.xAppsError) return `<div class="form-error">${esc(state.xAppsError)}</div>`;
+    let a = state.xApps;
+    if (!a) return '<div class="empty">Yükleniyor…</div>';
+    if (!a.services.length) return '<div class="empty">Henüz veri yok. Uygulama trafiği her dakika toplanır; birkaç dakika sonra burada görünür.</div>';
+    let list = a.services.slice(0, 12),
+      all = a.services.reduce((s, x) => s + x.down + x.up, 0),
+      max = Math.max(1, ...list.map((x) => x.down + x.up));
+    let rows = list
+      .map((x) => {
+        let t = x.down + x.up,
+          who = Object.entries(a.devices)
+            .map(([m, l]) => [m, l.find((y) => y.name === x.name)])
+            .filter(([, y]) => y)
+            .sort((p, q) => q[1].down + q[1].up - (p[1].down + p[1].up))
+            .slice(0, 3)
+            .map(([m]) => nameOf(m));
+        return `<div class="x-rank app-rank"><i class="app-dot" style="background:${appColor(x.name)}"></i><span class="x-rank-name" title="${esc(x.name)}">${esc(x.name)}${!state.stats.amac && who.length ? `<small>${esc(who.join(', '))}</small>` : ''}</span><i class="x-track"><em style="width:${(t / max) * 100}%;background:${appColor(x.name)}"></em></i><b>${NP.fmt.bytes(t)}<small>%${Math.round((t / all) * 100)}</small></b></div>`;
+      })
+      .join('');
+    let note =
+      a.source === 'adguard'
+        ? 'Servisler AdGuard’ın DNS kayıtlarından tanınır; tahminidir. Şifreli DNS (DoH) kullanan cihazlarda bazı trafik “Web (diğer)” görünür.'
+        : 'AdGuard bağlı olmadığı için servisler yalnız porta göre tahmin ediliyor (YouTube, Netflix gibi adlar görünmez). Entegrasyon > AdGuard Home’u bağlayın.';
+    return `<div class="x-ranks">${rows}</div><p class="field-hint">${note} Flow offloading açıkken hızlandırılan bağlantılar eksik sayılabilir.</p>`;
   }
   function usageBody() {
     if (state.xUsageError) return `<div class="form-error">${esc(state.xUsageError)}</div>`;
@@ -3332,12 +3378,17 @@
   };
   root.addEventListener('click', async (e) => {
     let b = e.target.closest(
-      '[data-x-days],[data-x-hours],[data-x-ack],[data-x-block],[data-x-day],[data-x-preset],[data-x-addrule],[data-x-delrule],[data-x-savesched],[data-x-savetz],[data-x-testnotify],[data-x-backup],[data-x-restore],[data-x-cflookup],[data-x-cfback],[data-x-cfsvc],[data-x-cfpublish],[data-x-cftoken]',
+      '[data-x-days],[data-x-hours],[data-x-adays],[data-x-ack],[data-x-block],[data-x-day],[data-x-preset],[data-x-addrule],[data-x-delrule],[data-x-savesched],[data-x-savetz],[data-x-testnotify],[data-x-backup],[data-x-restore],[data-x-cflookup],[data-x-cfback],[data-x-cfsvc],[data-x-cfpublish],[data-x-cftoken]',
     );
     if (!b) return;
     e.preventDefault();
     let d = b.dataset;
     // istatistik dönemi
+    if (d.xAdays) {
+      state.stats.adays = +d.xAdays;
+      state.xApps = null;
+      return render();
+    }
     if (d.xDays || d.xHours) {
       state.stats = state.stats || { days: 30, hours: 24 };
       if (d.xDays) {

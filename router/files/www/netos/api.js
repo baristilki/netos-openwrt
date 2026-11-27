@@ -854,6 +854,11 @@
   // -> { days: [{ date, total:{rx,tx}, wan:{ad:{rx,tx}}, devices:{anahtar:{rx,tx}} }] (eskiden yeniye),
   //      devices: [{ key, mac|null, rx, tx, total }] (dönem toplamı, büyükten küçüğe), wan: { ad: {rx,tx} } }
   //    rx = indirme, tx = yükleme (bayt). anahtar: MAC ya da eşlenemeyen cihaz için "ip:x.x.x.x"
+  // Uygulama (servis) bazlı trafik -> { source: 'adguard'|'ports', services[{name,down,up}], devices{mac: services[]} }
+  async function getApps(days = 7, mac = '') {
+    const r = await npCall('apps_get', { days, mac });
+    return { source: r.source || 'ports', services: r.services || [], devices: r.devices || {} };
+  }
   async function getUsage(days = 31) {
     const r = await npCall('usage_get', { days });
     const out = { days: [], devices: [], wan: {} };
@@ -1804,6 +1809,23 @@
         return { ok: true };
       },
       'netpanel.usage_get': (a) => ({ days: demoUsage.slice(0, a.days || 31) }),
+      'netpanel.apps_get': (a) => {
+        const G = 1e9, k = Math.min(a.days || 7, 30) / 7;
+        const per = {
+          'b0:be:76:42:e1:06': [['YouTube', 38, 1.1], ['Netflix', 22, 0.4], ['Web (diğer)', 6, 0.9], ['Google', 2.1, 0.6], ['Spotify', 1.4, 0.05]],
+          '2c:f0:5d:11:22:12': [['Steam', 64, 1.2], ['Discord', 2.2, 1.8], ['Twitch', 9, 0.2], ['Windows Update', 7.5, 0.1], ['Web (diğer)', 4, 0.8]],
+          '3c:22:fb:9a:10:02': [['Instagram', 9.5, 0.9], ['TikTok', 12, 0.6], ['WhatsApp', 1.3, 0.7], ['YouTube', 6, 0.2], ['Apple', 1.1, 2.4]],
+          'f8:4d:89:5e:aa:03': [['Netflix', 18, 0.3], ['Disney+', 7, 0.1], ['YouTube', 5, 0.1]],
+          'a4:83:e7:1c:22:01': [['Zoom', 3.2, 2.9], ['Microsoft', 2.4, 1.1], ['Web (diğer)', 2, 0.4]],
+        };
+        const devices = {}, tot = {};
+        for (const [m, l] of Object.entries(per)) {
+          if (a.mac && a.mac !== m) continue;
+          devices[m] = l.map(([name, d, u]) => ({ name, down: d * G * k, up: u * G * k }));
+          for (const s of devices[m]) ((tot[s.name] ||= { name: s.name, down: 0, up: 0 }).down += s.down), (tot[s.name].up += s.up);
+        }
+        return { source: 'adguard', services: Object.values(tot).sort((x, y) => y.down + y.up - x.down - x.up), devices };
+      },
       'netpanel.ping_get': (a) => { const s = nowSec() - (a.hours || 24) * 3600; return { samples: demoPing.filter((p) => p[0] >= s) }; },
       'netpanel.newdev_list': () => ({ ...demoNewdev, block_new: !!demoNotify.block_new }),
       'netpanel.newdev_ack': () => { demoNewdev.items.forEach((x) => (x.unseen = false)); return { ok: true }; },
@@ -2014,7 +2036,7 @@
     getHuawei, setHuaweiWifi, setHuaweiConfig, getHuaweiWifi, saveHuaweiWifi, scanHuaweiChannels, WIFI_CHANNELS: CHANNELS,
     getWans: () => getWans(), getSystem, changePassword, scanWeb,
     getWanConfig, setWan, setWanMode, getPorts, addWan, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
-    getUsage, getPingHistory, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
+    getUsage, getApps, getPingHistory, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
     getPortForwards, savePortForward, deletePortForward, setUpnp, setFirewall, getConnections, getLan, setLan, confirmLan, revertLan,
     getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,

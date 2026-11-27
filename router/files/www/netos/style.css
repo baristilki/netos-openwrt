@@ -2806,3 +2806,12 @@ input.field {
 .outage-nums { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 12px; font-size: 12px; color: var(--muted); }
 .outage-nums b { display: block; font-size: 17px; color: var(--text); }
 .outage-line small { color: var(--muted); font-size: 12px; }
+
+/* ── Uygulamalar ── */
+.apps-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.apps-dev { width: auto; max-width: 200px; height: 32px; padding: 0 10px; font-size: 12px; }
+.x-rank.app-rank { grid-template-columns: 12px minmax(110px, 220px) 1fr auto; }
+.app-dot { width: 10px; height: 10px; border-radius: 3px; }
+.app-rank .x-rank-name small { display: block; color: var(--muted); font-size: 11px; overflow: hidden; text-overflow: ellipsis; }
+.app-rank b small { display: block; color: var(--muted); font-weight: 500; font-size: 11px; }
+@media (max-width: 760px) { .x-rank.app-rank { grid-template-columns: 12px minmax(0, 1fr) auto; } .app-rank .x-track { grid-column: 2 / -1; grid-row: 2; } }

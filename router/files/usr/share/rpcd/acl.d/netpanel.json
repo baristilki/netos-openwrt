@@ -15,6 +15,7 @@
 					"speedtest_status",
 					"hw_wifi_get",
 					"usage_get",
+					"apps_get",
 					"ping_get",
 					"newdev_list",
 					"notify_get",

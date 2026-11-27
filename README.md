@@ -30,6 +30,9 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
   AdGuard ile cihaz başına yetişkin içerik filtresi, güvenli arama, YouTube/TikTok gibi servis engeli
 - Yeni cihaz uyarısı (isteğe bağlı otomatik engel), eve geldi / ayrıldı bildirimi
 - Cihaz başına anlık bağlantılar, günlük trafik istatistiği (30-100 gün)
+- **Uygulama bazlı trafik**: YouTube, Netflix, Steam, TikTok… hangi cihaz neye ne kadar harcadı
+  (bugün / 7 / 30 gün, cihaz filtresi). Servisler AdGuard Home'un DNS kayıtlarından tanınır;
+  AdGuard yoksa porta göre kaba tahmin yapılır. Ek paket gerekmez (conntrack + ucode).
 
 ### Ağ ve güvenlik
 - Fiziksel portlar: kablo takılı mı, bağlantı hızı (1 / 2.5 Gbit…), kopma sayısı, canlı trafik,
@@ -54,7 +57,6 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 - GitHub'dan tek tıkla güncelleme, isteğe bağlı gece otomatik güncelleme
 
 ### Yol haritası
-- Uygulama bazlı trafik (hangi cihaz YouTube/Netflix'e ne kadar harcadı — nlbwmon)
 - IPv6 ayarları
 - Misafir Wi-Fi yönetimi (Huawei misafir ağı: aç/kapa, şifre, süre, QR)
 - OpenWrt Wi-Fi için kanal analizi ve 802.11r (kopmadan geçiş)

@@ -444,6 +444,15 @@ window.NETOS_EN = {
   "Şu an kesinti var": "Outage in progress",
   "Kesinti raporu panoya kopyalandı": "Outage report copied to clipboard",
   "Operatöre şikâyette kanıt olarak kullanabilirsiniz. Hat yoklaması (mwan#) internete ping atamadığında kesinti sayılır.": "Use it as evidence when complaining to your ISP. An outage is counted when line monitoring (mwan3) can’t ping the internet.",
+  "Uygulamalar": "Apps",
+  "Bugün": "Today",
+  "Henüz veri yok. Uygulama trafiği her dakika toplanır; birkaç dakika sonra burada görünür.": "No data yet. App traffic is collected every minute; it shows up here in a few minutes.",
+  "Servisler AdGuard’ın DNS kayıtlarından tanınır; tahminidir. Şifreli DNS (DoH) kullanan cihazlarda bazı trafik “Web (diğer)” görünür. Flow offloading açıkken hızlandırılan bağlantılar eksik sayılabilir.": "Services are recognized from AdGuard’s DNS log, so they are estimates. On devices using encrypted DNS (DoH) some traffic shows as “Web (other)”. With flow offloading on, accelerated connections may be undercounted.",
+  "AdGuard bağlı olmadığı için servisler yalnız porta göre tahmin ediliyor (YouTube, Netflix gibi adlar görünmez). Entegrasyon > AdGuard Home’u bağlayın. Flow offloading açıkken hızlandırılan bağlantılar eksik sayılabilir.": "AdGuard isn’t connected, so services are guessed by port only (names like YouTube or Netflix won’t appear). Connect AdGuard Home under Integrations. With flow offloading on, accelerated connections may be undercounted.",
+  "Web (diğer)": "Web (other)",
+  "Görüntülü / sesli arama": "Video / voice calls",
+  "Oyun (Xbox / PlayStation)": "Gaming (Xbox / PlayStation)",
+  "Oyun (Steam)": "Gaming (Steam)",
 };
 
 /* Parça çevirileri: tam eşleşme yoksa metnin içinde geçen bu parçalar değiştirilir (değişken içeren metinler için). Uzundan kısaya uygulanır. */
