@@ -1,10 +1,11 @@
 #!/bin/sh
-# NetPanel kurulumu — router üzerinde çalıştırılır:  sh /tmp/netpanel/install.sh
+# NetOS kurulumu — router üzerinde çalıştırılır:  sh /tmp/netpanel/install.sh
+# (Panel > Sistem > Güncelleme de bu betiği GitHub sürümünden çalıştırır; ayarlar korunur.)
 set -e
 SRC=$(cd "$(dirname "$0")" && pwd)/files
 
 echo "[1/5] Dosyalar kopyalanıyor"
-mkdir -p /www/netpanel /usr/share/netpanel /usr/libexec/rpcd /usr/libexec/netpanel /usr/share/rpcd/acl.d /etc/hotplug.d/dhcp /etc/hotplug.d/iface /etc/netpanel
+mkdir -p /www/netos /usr/share/netpanel /usr/libexec/rpcd /usr/libexec/netpanel /usr/share/rpcd/acl.d /etc/hotplug.d/dhcp /etc/hotplug.d/iface /etc/netpanel
 cp -f "$SRC/usr/share/netpanel/common.sh" /usr/share/netpanel/
 cp -f "$SRC/usr/libexec/netpanel/"* /usr/libexec/netpanel/
 cp -f "$SRC/usr/libexec/rpcd/netpanel" /usr/libexec/rpcd/
@@ -14,7 +15,11 @@ cp -f "$SRC/etc/init.d/netpanel" /etc/init.d/
 cp -f "$SRC/etc/hotplug.d/dhcp/90-netpanel" /etc/hotplug.d/dhcp/
 cp -f "$SRC/etc/hotplug.d/iface/90-netpanel" /etc/hotplug.d/iface/
 [ -f /etc/config/netpanel ] || cp "$SRC/etc/config/netpanel" /etc/config/
-cp -rf "$SRC/www/netpanel/." /www/netpanel/
+rm -rf /www/netos.new && cp -rf "$SRC/www/netos" /www/netos.new && rm -rf /www/netos && mv /www/netos.new /www/netos
+cp -f "$SRC/../VERSION" /usr/share/netpanel/version 2>/dev/null
+# eski adres (/netpanel/) yeni adrese yönlensin
+rm -rf /www/netpanel && mkdir -p /www/netpanel
+printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=/netos/"><a href="/netos/">NetOS</a>\n' >/www/netpanel/index.html
 
 # Windows'tan gelen CRLF satır sonlarını temizle
 for f in /usr/share/netpanel/common.sh /usr/libexec/rpcd/netpanel /usr/sbin/netpanel-apply /usr/libexec/netpanel/* \
@@ -30,18 +35,25 @@ CRON="* * * * * /usr/libexec/netpanel/collect.sh >/dev/null 2>&1"
 mkdir -p /etc/crontabs
 touch /etc/crontabs/root
 grep -qF "/usr/libexec/netpanel/collect.sh" /etc/crontabs/root || echo "$CRON" >>/etc/crontabs/root
+# günlük güncelleme kontrolü (04:3x, cihazlar aynı anda GitHub'a gitmesin diye rastgele dakika)
+grep -qF "/usr/libexec/netpanel/update.sh" /etc/crontabs/root ||
+	echo "3$(( $(head -c1 /dev/urandom | od -An -tu1) % 10 )) 4 * * * /usr/libexec/netpanel/update.sh cron >/dev/null 2>&1" >>/etc/crontabs/root
 /etc/init.d/cron enable
 /etc/init.d/cron restart
 # yeni cihaz bildirimi: şu an ağda olan cihazları "bilinen" say (kurulumda bildirim yağmasın)
 /usr/libexec/netpanel/collect.sh seed
 
-# Huawei Wi-Fi köprüsü için curl + openssl
-if ! command -v curl >/dev/null || ! command -v openssl >/dev/null; then
-	echo "  curl / openssl-util kuruluyor (Huawei Wi-Fi kontrolü için)"
+# curl + openssl (Huawei, güncelleme, ağ tarayıcı), etherwake (Wake-on-LAN)
+NEED=""
+command -v curl >/dev/null || NEED="$NEED curl"
+command -v openssl >/dev/null || NEED="$NEED openssl-util"
+command -v etherwake >/dev/null || NEED="$NEED etherwake"
+if [ -n "$NEED" ]; then
+	echo "  paketler kuruluyor:$NEED"
 	if command -v apk >/dev/null; then
-		apk update >/dev/null && apk add curl openssl-util || echo "  UYARI: paketler kurulamadı"
+		apk update >/dev/null && apk add $NEED || echo "  UYARI: paketler kurulamadı"
 	else
-		opkg update >/dev/null && opkg install curl openssl-util || echo "  UYARI: paketler kurulamadı"
+		opkg update >/dev/null && opkg install $NEED || echo "  UYARI: paketler kurulamadı"
 	fi
 fi
 
@@ -85,5 +97,5 @@ fi
 
 IP=$(uci -q get network.lan.ipaddr | cut -d/ -f1)
 echo
-echo "Kurulum tamam ->  http://${IP:-192.168.1.1}/netpanel/"
-rm -rf /tmp/netpanel
+echo "Kurulum tamam ->  http://${IP:-192.168.1.1}/netos/"
+[ "$NP_KEEP_SRC" = 1 ] || rm -rf /tmp/netpanel

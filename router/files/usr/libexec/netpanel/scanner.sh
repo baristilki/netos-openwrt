@@ -1,6 +1,8 @@
 #!/bin/sh
 # NetOS ağ tarayıcı (Advanced IP Scanner benzeri) — yalnız yerel ağlarda çalışır
-#   scanner.sh start   {"ports":true}  -> arka planda taramayı başlatır
+#   scanner.sh start   {"ports":true, "range":"192.168.1.0/24 | 192.168.1.10-50 | 10.0.0.5"}  -> arka planda tarar
+#                      (range boşsa routerın yerel ağları; yalnız özel adresler, en fazla 1024 adres)
+#   scanner.sh wol     {"mac":"aa:bb:.."}  -> Wake-on-LAN sihirli paketi (etherwake)
 #   scanner.sh status                  -> {running, phase, done, total, started, finished, hosts:[...]}
 #
 # Yöntem: alt ağdaki her adrese 1 ping; ICMP'yi engelleyen cihazlar ARP yanıtıyla yine bulunur.
@@ -44,6 +46,28 @@ hosts_of() {
 	}'
 }
 
+# kullanıcı aralığı -> adres listesi. Çıkış: 2 biçim hatası, 3 özel ağ değil, 4 çok büyük
+range_hosts() {
+	echo "$1" | awk -v max="$MAXHOSTS" '
+		function n(ip, a) { if (split(ip, a, ".") != 4) return -1
+			for (k = 1; k <= 4; k++) if (a[k] !~ /^[0-9]+$/ || a[k] > 255) return -1
+			return ((a[1] * 256 + a[2]) * 256 + a[3]) * 256 + a[4] }
+		function priv(x) { return (x >= 167772160 && x <= 184549375) || (x >= 2886729728 && x <= 2887778303) || (x >= 3232235520 && x <= 3232301055) || (x >= 1681915904 && x <= 1686110207) }
+		function ip(i) { return sprintf("%d.%d.%d.%d", int(i / 16777216) % 256, int(i / 65536) % 256, int(i / 256) % 256, i % 256) }
+		{ gsub(/[ \t]/, ""); s = $0
+			if (s ~ /\//) { split(s, c, "/"); b = n(c[1]); p = c[2]
+				if (b < 0 || p !~ /^[0-9]+$/ || p > 32) exit 2
+				size = 2 ^ (32 - p); lo = b - (b % size); hi = lo + size - 1
+				if (p <= 30) { lo++; hi-- } }
+			else if (s ~ /-/) { split(s, r, "-"); lo = n(r[1])
+				if (r[2] ~ /^[0-9]+$/) { split(r[1], o, "."); hi = n(o[1] "." o[2] "." o[3] "." r[2]) } else hi = n(r[2])
+				if (lo < 0 || hi < 0 || hi < lo) exit 2 }
+			else { lo = n(s); hi = lo; if (lo < 0) exit 2 }
+			if (!priv(lo) || !priv(hi)) exit 3
+			if (hi - lo + 1 > max) exit 4
+			for (i = lo; i <= hi; i++) print ip(i) }'
+}
+
 ping_one() {
 	local r
 	r=$(ping -c 1 -W 1 "$1" 2>/dev/null | sed -n 's/.*time=\([0-9.]*\).*/\1/p')
@@ -78,7 +102,11 @@ run() {
 	date +%s >"$DIR/started"
 	lan_nets >"$DIR/nets"
 	: >"$DIR/targets"
-	while read -r n d cidr; do hosts_of "$cidr" | sed "s/\$/ $n $d/" >>"$DIR/targets"; done <"$DIR/nets"
+	if [ -s "$DIR/range" ]; then
+		range_hosts "$(cat "$DIR/range")" | sed 's/$/ özel -/' >"$DIR/targets"
+	else
+		while read -r n d cidr; do hosts_of "$cidr" | sed "s/\$/ $n $d/" >>"$DIR/targets"; done <"$DIR/nets"
+	fi
 	self=$(awk '{ sub(/\/.*/, "", $3); print $3 }' "$DIR/nets")
 	total=$(wc -l <"$DIR/targets")
 	setst running ping 0 "$total"
@@ -98,7 +126,7 @@ run() {
 	cat "$DIR/p/"* 2>/dev/null >"$DIR/ping"
 	awk 'FNR == NR { t[$1] = 1; next } t[$1] { print $1 }' "$DIR/targets" "$DIR/arp" >"$DIR/alive"
 	cut -d' ' -f1 "$DIR/ping" >>"$DIR/alive"
-	for ip in $self; do echo "$ip" >>"$DIR/alive"; done
+	for ip in $self; do grep -q "^$ip " "$DIR/targets" && echo "$ip" >>"$DIR/alive"; done
 	sort -u "$DIR/alive" | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n >"$DIR/alive.s" && mv "$DIR/alive.s" "$DIR/alive"
 	np_neigh | awk -F'\t' '{ print $2, $1 }' >"$DIR/macs" # MAC için tüm komşu kayıtları
 
@@ -123,7 +151,7 @@ run() {
 
 build() {
 	local ip mac name net ms first=1 rdns web tcp
-	printf '{"nets":['
+	printf '{"range":%s,"nets":[' "$(json_str "$(cat "$DIR/range" 2>/dev/null)")"
 	awk '{ printf "%s{\"name\":\"%s\",\"cidr\":\"%s\"}", (NR > 1 ? "," : ""), $1, $3 }' "$DIR/nets"
 	printf '],"ports_checked":%s,"tcp_checked":%s,"hosts":[' "$([ -n "$(ls "$DIR/o" 2>/dev/null)" ] && echo true || echo false)" "$([ "$TELNET" = 1 ] && echo true || echo false)"
 	for ip in $(cat "$DIR/alive"); do
@@ -167,11 +195,23 @@ start)
 	input=$(cat)
 	json_load "$input" 2>/dev/null
 	json_get_var ports ports
+	json_get_var range range
 	[ "$ports" = 0 ] || ports=1
+	range=$(printf '%s' "$range" | tr -d ' 	')
+	if [ -n "$range" ]; then
+		range_hosts "$range" >/dev/null
+		case $? in
+		0) ;;
+		3) echo '{"ok":false,"error":"Yalnız yerel (özel) adresler taranabilir: 10.x, 172.16-31.x, 192.168.x"}'; exit 0 ;;
+		4) echo '{"ok":false,"error":"Aralık çok büyük; en fazla 1024 adres (ör. /22)"}'; exit 0 ;;
+		*) echo '{"ok":false,"error":"Aralık anlaşılmadı. Örnek: 192.168.1.0/24, 192.168.1.10-50 ya da 192.168.1.20"}'; exit 0 ;;
+		esac
+	fi
 	if [ -f "$DIR/pid" ] && kill -0 "$(cat "$DIR/pid")" 2>/dev/null; then
 		echo '{"ok":true,"already":true}'
 		exit 0
 	fi
+	printf '%s' "$range" >"$DIR/range"
 	date +%s >"$DIR/started"
 	setst running ping 0 0
 	("$0" run "$ports" >/dev/null 2>&1 </dev/null &
@@ -183,6 +223,16 @@ run)
 	run "$2"
 	;;
 status) status ;;
+wol)
+	input=$(cat)
+	json_load "$input" 2>/dev/null
+	json_get_var mac mac
+	mac=$(echo "$mac" | tr 'A-F' 'a-f')
+	np_valid_mac "$mac" || { echo '{"ok":false,"error":"Geçersiz MAC adresi"}'; exit 0; }
+	command -v etherwake >/dev/null || { echo '{"ok":false,"error":"etherwake paketi kurulu değil (apk add etherwake)"}'; exit 0; }
+	LAN=$(np_ifdev lan); [ -n "$LAN" ] || LAN=br-lan
+	etherwake -i "$LAN" "$mac" >/dev/null 2>&1 && echo '{"ok":true}' || echo '{"ok":false,"error":"Paket gönderilemedi"}'
+	;;
 *) echo "kullanım: $0 start|status" >&2; exit 1 ;;
 esac
 exit 0

@@ -70,6 +70,12 @@
       clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
       shield: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3 5 6v6c0 4 3 7 7 9 4-2 7-5 7-9V6z"/></svg>',
       save: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 4v11m-4-4 4 4 4-4M5 19h14"/></svg>',
+      copy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a1 1 0 0 1 1-1h10"/></svg>',
+      more: '<svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>',
+      download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>',
+      eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+      eyeOff: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18M10.6 5.1A10.6 10.6 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.2M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6M9.9 9.9a3 3 0 0 0 4.2 4.2"/></svg>',
+      lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>',
       plug: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 7V3M15 7V3M6 7h12v4a6 6 0 0 1-12 0zM12 17v4"/></svg>',
       logout: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4h4a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-4M10 16l-4-4 4-4M6 12h10"/></svg>',
       radar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><path d="M12 12l6-6"/><circle cx="12" cy="12" r="1" fill="currentColor"/></svg>',
@@ -78,14 +84,16 @@
       sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
       moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
     })[name] || '';
-  const APP_VERSION = '1.1.0';
+  const APP_VERSION = '1.2.0';
   // [yol, ikon, ad, mobil alt menüde mi (değilse "Menü" sayfasında)]
   const navGroups = [
     ['Ağ', [['/', 'home', 'Ana sayfa', 1], ['/internet', 'globe', 'İnternet', 1], ['/devices', 'devices', 'Cihazlar', 1], ['/wifi', 'wifi', 'Wi-Fi', 1]]],
-    ['Analiz', [['/speed', 'speed', 'Hız & Ping'], ['/stats', 'chart', 'İstatistik']]],
+    ['Analiz', [['/speed', 'speed', 'Hız & Ping'], ['/stats', 'chart', 'İstatistik'], ['/scanner', 'radar', 'Ağ tarayıcı', 0, 'scanner']]],
     ['Yönetim', [['/integrations', 'plug', 'Entegrasyon'], ['/system', 'system', 'Sistem']]],
   ];
   const navItems = navGroups.flatMap((g) => g[1]);
+  // 5. alan: yalnız o entegrasyon açıkken görünür
+  const navShown = (x) => !x[4] || integOn(x[4]);
   const typeKeys = [
     'phone',
     'tablet',
@@ -170,18 +178,19 @@
   function nav() {
     let fw = (state.overview?.firmware || '').match(/OpenWrt\s+[\w.-]+/)?.[0] || 'OpenWrt';
     let link = ([p, i, t]) => `<a href="#${p}" class="${isActive(p) ? 'active' : ''}"${isActive(p) ? ' aria-current="page"' : ''}>${icon(i)}<span>${t}</span></a>`;
-    let side = navGroups.map(([g, items]) => `<div class="nav-group"><div class="nav-label">${g}</div>${items.map(link).join('')}</div>`).join('');
+    if (NP.hasSession() && !state.xInteg && !state.xIntegError) loadX('xInteg', () => NP.getIntegrations());
+    let side = navGroups.map(([g, items]) => `<div class="nav-group"><div class="nav-label">${g}</div>${items.filter(navShown).map(link).join('')}</div>`).join('');
     let mobileMain = navItems.filter((x) => x[3]);
     let moreActive = !mobileMain.some((x) => isActive(x[0]));
     let bottom =
       mobileMain.map(([p, i, t]) => `<a href="#${p}" class="${isActive(p) ? 'active' : ''}">${icon(i)}<span>${p === '/' ? 'Ana' : p === '/devices' ? 'Cihaz' : t}</span></a>`).join('') +
       `<a href="#/more" class="${moreActive ? 'active' : ''}">${icon('menu')}<span>Menü</span></a>`;
-    return `<aside class="sidebar"><div class="brand brand-center">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span><span class="brand-ver">v${APP_VERSION} · ${esc(fw)}</span></div><nav class="nav">${side}</nav><div class="sidebar-foot"><button class="logout-btn" type="button" data-logout>${icon('logout')}<span>Çıkış yap</span></button></div></aside><div class="main"><header class="topbar"><div class="mobile-brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><div class="top-status">${state.error ? '<span class="pill"><i class="dot bad"></i> Bağlantı sorunu</span>' : ''}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${state.overview ? esc(state.overview.hostname) : 'NetOS'}</span>${themeButton()}</div></header><main class="content" id="content"></main></div><nav class="bottom-nav">${bottom}</nav><div id="drawer-host"></div><div class="toast" id="toast" role="status"></div>`;
+    return `<aside class="sidebar"><div class="brand brand-center">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span><span class="brand-ver">v${esc(state.status?.version || APP_VERSION)} · ${esc(fw)}</span></div><nav class="nav">${side}</nav><div class="sidebar-foot"><button class="logout-btn" type="button" data-logout>${icon('logout')}<span>Çıkış yap</span></button></div></aside><div class="main"><header class="topbar"><div class="mobile-brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><div class="top-status">${state.error ? '<span class="pill"><i class="dot bad"></i> Bağlantı sorunu</span>' : ''}${NP.isMock ? '<span class="pill demo">Demo verisi</span>' : ''}<span class="top-host">${state.overview ? esc(state.overview.hostname) : 'NetOS'}</span>${themeButton()}</div></header><main class="content" id="content"></main></div><nav class="bottom-nav">${bottom}</nav><div id="drawer-host"></div><div class="toast" id="toast" role="status"></div>`;
   }
   // Mobil "Menü" sayfası: alt menüye sığmayan bölümler + tema + çıkış
   function morePage() {
-    let rest = navItems.filter((x) => !x[3]);
-    return `${pageHead('NetOS', 'Menü', `Sürüm ${APP_VERSION}`)}<div class="more-list">${rest.map(([p, i, t]) => `<a class="more-item" href="#${p}"><span class="more-icon">${icon(i)}</span><strong>${t}</strong><span class="more-arrow">›</span></a>`).join('')}
+    let rest = navItems.filter((x) => !x[3] && navShown(x));
+    return `${pageHead('NetOS', 'Menü', `Sürüm ${state.status?.version || APP_VERSION}`)}<div class="more-list">${rest.map(([p, i, t]) => `<a class="more-item" href="#${p}"><span class="more-icon">${icon(i)}</span><strong>${t}</strong><span class="more-arrow">›</span></a>`).join('')}
       <button class="more-item" type="button" data-theme-toggle-row><span class="more-icon">${icon(isDark() ? 'sun' : 'moon')}</span><strong>${isDark() ? 'Gündüz modu' : 'Gece modu'}</strong></button>
       <button class="more-item danger" type="button" data-logout><span class="more-icon">${icon('logout')}</span><strong>Çıkış yap</strong></button></div>`;
   }
@@ -472,7 +481,7 @@
     host.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open" role="dialog" aria-modal="true"><div class="drawer-head"><div><div class="eyebrow">HUAWEI Wi-Fi</div><h2>${esc(b.ssid)}</h2><p>${esc(b.bandLabel)} · ${esc(b.securityLabel)}</p></div><button class="icon-btn" data-close-drawer>${icon('x')}</button></div><form class="drawer-body" id="hw-wifi-form" data-band="${esc(band)}"><div class="drawer-section"><div class="field-wrap"><label>Ağ adı (SSID)</label><input class="field" name="ssid" maxlength="32" value="${esc(b.ssid)}"></div>${
       b.open
         ? '<p class="field-hint">Bu ağ şifresiz (açık). Güvenlik tipini Huawei arayüzünden değiştirin.</p>'
-        : `<div class="field-wrap"><label>Şifre</label><div class="password-line"><input class="field" name="password" type="password" minlength="8" maxlength="63" autocomplete="new-password" placeholder="Kayıtlı — değiştirmek için yazın"><button class="btn small" type="button" data-hw-reveal>Göster</button></div><span class="field-hint">Boş bırakırsanız mevcut şifre korunur. 8–63 karakter.</span></div>`
+        : `<div class="field-wrap"><label>Şifre</label><div class="password-line"><input class="field" name="password" type="password" minlength="8" maxlength="63" autocomplete="new-password" placeholder="Kayıtlı — değiştirmek için yazın"></div><span class="field-hint">Boş bırakırsanız mevcut şifre korunur. 8–63 karakter.</span></div>`
     }${chOpts}<div class="toggle-line"><div><strong>Ağı gizle</strong><p>Ağ adı yayınlanmaz; cihazlar adı elle girerek bağlanır.</p></div><input class="switch" type="checkbox" name="hidden"${b.hidden ? ' checked' : ''}></div></div>${
       w.dbho ? '<p class="field-hint drawer-section">Çift bant tek ağ modu: ad ve şifre iki banda birlikte uygulanır.</p>' : ''
     }<div class="drawer-section alert">Kaydedince Huawei Wi-Fi yeniden başlar; bu ağa bağlı cihazlar birkaç saniye kopar ve şifre değiştiyse yeni şifreyle tekrar bağlanmaları gerekir.</div><div class="form-error" id="hw-wifi-error"></div></form><div class="drawer-foot"><span></span><div class="drawer-actions"><button class="btn" data-close-drawer>İptal</button><button class="btn primary" type="submit" form="hw-wifi-form">Kaydet</button></div></div></aside>`;
@@ -750,13 +759,14 @@
     { id: 'huawei', icon: 'wifi', name: 'Huawei WiFi AX2 / WS5200', cat: 'Wi-Fi erişim noktası', desc: 'Huawei cihazın Wi-Fi’sini aç/kapa; ağ adı, şifre, kanal ve kanal analizi. Bağlı cihazların bandı cihaz listesinde görünür.' },
     { id: 'tplink', icon: 'router', name: 'TP-Link Archer BE230', cat: 'Wi-Fi erişim noktası', desc: 'Wi-Fi 7 router’ı erişim noktası olarak NetOS’tan yönetme.', soon: true },
     { id: 'cloudflare', icon: 'cloud', name: 'Cloudflare Tunnel', cat: 'Uzaktan erişim', desc: 'Port açmadan panele ve ağdaki servislere dışarıdan güvenli erişim; e-posta ile giriş koruması.' },
-    { id: 'scanner', icon: 'radar', name: 'Ağ tarayıcı', cat: 'Araç', desc: 'Ağdaki tüm IP adreslerini tarar; NetOS’un görmediği cihazları, açık portları ve web arayüzlerini bulur.' },
+    { id: 'scanner', icon: 'radar', name: 'Ağ tarayıcı', cat: 'Araç · Analiz menüsünde', desc: 'Ağdaki tüm IP adreslerini tarar; bilinmeyen cihazları, açık portları ve web arayüzlerini bulur. Açınca Analiz menüsüne eklenir.', page: '/scanner' },
   ];
   const integOn = (id) => (id === 'huawei' ? !!(state.xInteg?.huawei || state.integLocal?.huawei) : !!state.xInteg?.[id]);
   function integrationsPage() {
     if (!state.xInteg && !state.xIntegError) loadX('xInteg', () => NP.getIntegrations(), '/integrations');
     let g = state.xInteg;
     if (state.xIntegError) return `${pageHead('Eklentiler', 'Entegrasyonlar', '')}<div class="form-error">${esc(state.xIntegError)}</div>`;
+    if (g && integOn('cloudflare') && !state.xTunnel && !state.xTunnelError) loadX('xTunnel', () => NP.getTunnel(), '/integrations');
     let tiles = INTEGRATIONS.map((x) => {
       let on = integOn(x.id);
       let st = x.soon
@@ -774,78 +784,138 @@
               : on
                 ? '<span class="badge ok">Açık</span>'
                 : '<span class="badge">Kapalı</span>';
+      let open = !on || x.soon ? '' : x.page ? `<a class="link-btn" href="#${x.page}">Aç →</a>` : `<button class="link-btn" type="button" data-integ-open="${x.id}">Ayarlar</button>`;
       let ctl = x.soon
         ? '<span class="integ-soon">Geliştiriliyor</span>'
         : `<input class="switch" type="checkbox" data-integ="${x.id}" aria-label="${esc(x.name)}"${on ? ' checked' : ''}${g ? '' : ' disabled'}>`;
-      return `<article class="integ-tile${on ? ' on' : ''}${x.soon ? ' soon' : ''}"><div class="integ-top"><span class="integ-icon">${icon(x.icon)}</span><div><h3>${esc(x.name)}</h3><small>${esc(x.cat)}</small></div></div><p>${esc(x.desc)}</p><div class="integ-foot">${st}${on && !x.soon ? `<button class="link-btn" type="button" data-integ-goto="${x.id}">Ayarlar ↓</button>` : ''}${ctl}</div></article>`;
+      return `<article class="integ-tile${on ? ' on' : ''}${x.soon ? ' soon' : ''}"><div class="integ-top"><span class="integ-icon">${icon(x.icon)}</span><div><h3>${esc(x.name)}</h3><small>${esc(x.cat)}</small></div></div><p>${esc(x.desc)}</p><div class="integ-foot">${st}${open}${ctl}</div></article>`;
     }).join('');
-    let details = '';
-    if (g) {
-      if (integOn('huawei')) details += huaweiConfigCard();
-      if (integOn('cloudflare')) {
-        if (!state.xTunnel && !state.xTunnelError) loadX('xTunnel', () => NP.getTunnel(), '/integrations');
-        details += tunnelCard();
-      }
-      if (integOn('scanner')) details += scannerCard();
-    }
-    return `${pageHead('Eklentiler', 'Entegrasyonlar', 'NetOS’u ağınızdaki diğer cihaz ve servislerle bağlayın. Kullandıklarınızı etkinleştirin; kapalı olanlar arayüzde yer kaplamaz.')}<div class="grid"><div class="integ-grid span-12">${tiles}</div>${details}</div>`;
+    return `${pageHead('Eklentiler', 'Entegrasyonlar', 'NetOS’u ağınızdaki diğer cihaz ve servislerle bağlayın. Kullandıklarınızı etkinleştirin, ayarlarını “Ayarlar”dan yapın.')}<div class="integ-grid">${tiles}</div>`;
+  }
+  // Entegrasyon ayarları açılır pencerede (sağdan çekmece); sayfa yeniden çizilse de açık kalır
+  function drawIntegDrawer() {
+    let id = state.integDrawer,
+      x = INTEGRATIONS.find((i) => i.id === id),
+      host = document.getElementById('drawer-host');
+    if (!x || !host) return;
+    let body = id === 'huawei' ? huaweiConfigCard() : id === 'cloudflare' ? tunnelCard() : '';
+    let prev = host.querySelector('.drawer-body')?.scrollTop ?? state.integDrawerScroll ?? 0;
+    host.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open integ-drawer" role="dialog" aria-modal="true" aria-label="${esc(x.name)}"><div class="drawer-head"><div class="integ-top"><span class="integ-icon">${icon(x.icon)}</span><div><div class="eyebrow">Entegrasyon</div><h2>${esc(x.name)}</h2><p>${esc(x.cat)}</p></div></div><button class="icon-btn" type="button" aria-label="Kapat" data-close-drawer>${icon('x')}</button></div><div class="drawer-body">${body}</div></aside>`;
+    let b = host.querySelector('.drawer-body');
+    b.scrollTop = prev;
+    b.addEventListener('scroll', () => (state.integDrawerScroll = b.scrollTop), { passive: true });
+  }
+  function openIntegDrawer(id) {
+    state.integDrawer = id;
+    state.integDrawerScroll = 0;
+    if (id === 'cloudflare' && !state.xTunnel && !state.xTunnelError) loadX('xTunnel', () => NP.getTunnel(), '/integrations');
+    drawIntegDrawer();
   }
 
-  /* ── Ağ tarayıcı ── */
-  function scannerCard() {
+  /* ── Ağ tarayıcı (Analiz > Ağ tarayıcı) ── */
+  function scannerPage() {
+    let head = pageHead('Analiz', 'Ağ tarayıcı', 'Ağdaki tüm IP adreslerini tarayın: bilinmeyen cihazlar, açık portlar, web arayüzleri.');
+    if (state.xInteg && !integOn('scanner'))
+      return `${head}<section class="card"><div class="empty">Ağ tarayıcı kapalı. <a href="#/integrations">Entegrasyonlar</a> sayfasından etkinleştirin.</div></section>`;
+    return `${head}${scannerBox()}`;
+  }
+  function scannerBox() {
     let sc = state.xScan;
-    if (!sc && !state.xScanError) loadX('xScan', () => NP.getScan(), '/integrations').then(pollScan);
+    if (!sc && !state.xScanError) loadX('xScan', () => NP.getScan(), '/scanner').then(pollScan);
     let busy = sc?.running;
     let phase = !sc ? '' : sc.phase === 'ping' ? 'Adresler taranıyor' : sc.phase === 'ports' ? 'Portlar ve web arayüzleri kontrol ediliyor' : '';
     let pct = sc && sc.total ? Math.round((sc.done / sc.total) * 100) : 0;
-    let ctl = `<div class="scan-ctl"><label class="check-line"><input type="checkbox" id="scan-ports"${state.scanPorts === false ? '' : ' checked'}${busy ? ' disabled' : ''}> Port ve web arayüzü kontrolü</label><button class="btn small primary" type="button" data-scan-start${busy ? ' disabled' : ''}>${busy ? 'Taranıyor…' : sc?.result ? 'Yeniden tara' : 'Taramayı başlat'}</button></div>`;
+    let range = state.scanRange ?? sc?.result?.range ?? '';
+    let ctl = `<form class="scan-ctl" id="scan-form"><div class="scan-range"><label for="scan-range">Taranacak adresler</label><input class="field" id="scan-range" value="${esc(range)}" placeholder="Otomatik: routerın yerel ağları" autocomplete="off" spellcheck="false"${busy ? ' disabled' : ''}><span class="field-hint">Örnek: 192.168.1.0/24 · 192.168.1.10-50 · 10.0.0.5 — en fazla 1024 adres</span></div><label class="check-line"><input type="checkbox" id="scan-ports"${state.scanPorts === false ? '' : ' checked'}${busy ? ' disabled' : ''}> Port ve web arayüzü kontrolü</label><button class="btn primary" type="submit"${busy ? ' disabled' : ''}>${icon('radar')}${busy ? 'Taranıyor…' : sc?.result ? 'Yeniden tara' : 'Taramayı başlat'}</button></form><div class="form-error" id="scan-error">${esc(state.scanStartError || '')}</div>`;
     let prog = busy ? `<div class="scan-progress"><div class="scan-bar"><i style="width:${pct}%"></i></div><span>${phase} · ${sc.done}/${sc.total}</span></div>` : '';
     let body = '';
     if (state.xScanError) body = `<div class="form-error">${esc(state.xScanError)}</div>`;
     else if (!sc) body = '<div class="empty">Yükleniyor…</div>';
-    else if (!sc.result && !busy) body = `<div class="empty">Henüz tarama yapılmadı. Yerel ağdaki tüm adresler (ör. 192.168.1.1–254) taranır; yaklaşık 10–30 saniye sürer.</div>`;
+    else if (!sc.result && !busy) body = '<div class="empty">Henüz tarama yapılmadı. Boş bırakırsanız routerın yerel ağları (ör. 192.168.1.1–254) taranır; 10–30 saniye sürer.</div>';
     else if (sc.result) body = scanResults(sc);
-    return `<section class="card span-12 integ-detail" id="integ-scanner">${cardHead('radar', 'Ağ tarayıcı')}${ctl}${prog}${body}</section>`;
+    return `<section class="card scan-card" id="scanner-box">${ctl}${prog}${body}</section>`;
   }
-  function scanRows(sc) {
-    let f = state.scanFilter || 'all';
-    return sc.result.hosts
-      .map((h) => ({ h, c: h.mac ? state.clients.find((x) => x.mac === h.mac) : null }))
-      .filter(({ h, c }) => f === 'all' || (f === 'unknown' && !c && !h.self) || (f === 'web' && h.web.length) || (f === 'ports' && h.ports.length));
+  const scanClient = (h) => (h.mac ? state.clients.find((x) => x.mac === h.mac) : null);
+  function scanList(sc) {
+    let f = state.scanFilter || 'all',
+      q = (state.scanQuery || '').trim().toLowerCase(),
+      sort = state.scanSort || { key: 'ip', dir: 1 };
+    let ipn = (ip) => ip.split('.').reduce((a, x) => a * 256 + +x, 0);
+    let list = sc.result.hosts
+      .map((h) => {
+        let c = scanClient(h);
+        return { h, c, name: c ? c.displayName : h.name || '', type: c?.type && c.type !== 'other' ? c.type : h.type };
+      })
+      .filter(({ h, c }) => f === 'all' || (f === 'unknown' && !c && !h.self) || (f === 'web' && h.web.length) || (f === 'ports' && h.ports.length))
+      .filter(({ h, name }) => !q || [h.ip, h.mac, NP.fmt.mac(h.mac || ''), name, h.name].join(' ').toLowerCase().includes(q));
+    let key = {
+      ip: (x) => ipn(x.h.ip),
+      name: (x) => (x.name || '~').toLowerCase(),
+      ping: (x) => (x.h.ping == null ? 1e9 : x.h.ping),
+      type: (x) => x.type,
+    }[sort.key];
+    return list.sort((a, b) => (key(a) > key(b) ? 1 : key(a) < key(b) ? -1 : 0) * sort.dir);
+  }
+  function scanRow({ h, c, name, type }) {
+    let tags = `${h.self ? '<span class="badge ok">Bu router</span>' : c ? '' : '<span class="badge warn">NetOS’ta yok</span>'}${h.randomMac ? '<span class="badge" title="Telefonların özel (rastgele) Wi-Fi adresi">Rastgele MAC</span>' : ''}`;
+    let ports = h.ports.map((p) => `<span class="port-tag" title="TCP ${p.port}">${esc(p.name)}<small>${p.port}</small></span>`).join('');
+    let globe = !h.web.length
+      ? ''
+      : h.web.length === 1
+        ? `<a class="icon-btn globe" href="${esc(h.web[0])}" target="_blank" rel="noopener" title="Web arayüzünü aç: ${esc(h.web[0])}" aria-label="Web arayüzünü aç">${icon('globe')}</a>`
+        : `<details class="pop"><summary class="icon-btn globe" title="${h.web.length} web arayüzü" aria-label="Web arayüzleri">${icon('globe')}<i class="pop-count">${h.web.length}</i></summary><div class="pop-menu">${h.web.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/\/$/, ''))} ↗</a>`).join('')}</div></details>`;
+    let menu = `<details class="pop"><summary class="icon-btn" title="Diğer işlemler" aria-label="Diğer işlemler">${icon('more')}</summary><div class="pop-menu">
+      <button type="button" data-copy="${esc(h.ip)}">IP adresini kopyala</button>
+      ${h.mac ? `<button type="button" data-copy="${esc(NP.fmt.mac(h.mac))}">MAC adresini kopyala</button>` : ''}
+      ${h.mac && !h.self ? `<button type="button" data-wol="${esc(h.mac)}">Uyandır (Wake-on-LAN)</button>` : ''}
+      ${c ? `<button type="button" data-client="${esc(c.mac)}">NetOS’ta ayarlarını aç</button>` : ''}
+      ${h.web.map((u) => `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/\/$/, ''))} ↗</a>`).join('')}
+    </div></details>`;
+    return `<div class="scan-row"><span class="type-icon tiny" title="${c?.type && c.type !== 'other' ? '' : 'Tahmini: '}${esc(NP.TYPE_LABELS[type] || 'Diğer')}">${typeIcon(type)}</span>
+      <span class="scan-ip num"><button type="button" class="copy-btn" data-copy="${esc(h.ip)}" title="IP adresini kopyala">${esc(h.ip)}${icon('copy')}</button></span>
+      <div class="scan-name"><strong>${esc(name || '—')}</strong>${c && h.name && h.name !== name ? `<small>${esc(h.name)}</small>` : ''}<div class="scan-tags">${tags}</div></div>
+      <span class="scan-mac num">${h.mac ? `<button type="button" class="copy-btn" data-copy="${esc(NP.fmt.mac(h.mac))}" title="MAC adresini kopyala">${esc(NP.fmt.mac(h.mac))}${icon('copy')}</button>` : '—'}</span>
+      <span class="scan-ping num">${h.ping == null ? '<span title="Ping’e yanıt vermedi, ARP ile bulundu">—</span>' : h.ping < 1 ? '<1 ms' : Math.round(h.ping) + ' ms'}</span>
+      <div class="scan-ports">${ports}</div><div class="scan-act">${globe}${menu}</div></div>`;
   }
   function scanResults(sc) {
     let r = sc.result,
-      all = r.hosts.map((h) => ({ h, c: h.mac ? state.clients.find((x) => x.mac === h.mac) : null }));
-    let unknown = all.filter(({ h, c }) => !c && !h.self).length,
-      web = r.hosts.filter((h) => h.web.length).length,
-      ports = r.hosts.filter((h) => h.ports.length).length;
-    let f = state.scanFilter || 'all';
-    let chip = (id, label, n) => `<button type="button" class="chip${f === id ? ' active' : ''}" data-scan-filter="${id}">${label} <b>${n}</b></button>`;
+      all = r.hosts.map((h) => ({ h, c: scanClient(h) }));
+    let n = {
+      all: r.hosts.length,
+      unknown: all.filter(({ h, c }) => !c && !h.self).length,
+      web: r.hosts.filter((h) => h.web.length).length,
+      ports: r.hosts.filter((h) => h.ports.length).length,
+    };
+    let f = state.scanFilter || 'all',
+      sort = state.scanSort || { key: 'ip', dir: 1 };
+    let chip = (id, label) => `<button type="button" class="chip${f === id ? ' active' : ''}" data-scan-filter="${id}">${label} <b>${n[id]}</b></button>`;
+    let th = (key, label) => `<button type="button" class="th-sort${sort.key === key ? ' on' : ''}" data-scan-sort="${key}">${label}${sort.key === key ? (sort.dir > 0 ? ' ↑' : ' ↓') : ''}</button>`;
     let secs = sc.finished && sc.started ? Math.max(1, Math.round((sc.finished - sc.started) / 1000)) : 0;
-    let rows = scanRows(sc)
-      .map(({ h, c }) => {
-        let name = c ? c.displayName : h.name || '';
-        let tags = `${h.self ? '<span class="badge ok">Bu router</span>' : c ? '' : '<span class="badge warn">NetOS’ta yok</span>'}${h.randomMac ? '<span class="badge" title="Telefonların özel (rastgele) Wi-Fi adresi">Rastgele MAC</span>' : ''}`;
-        let portsHtml = h.ports.map((p) => `<span class="port-tag" title="TCP ${p.port}">${esc(p.name)}<small>${p.port}</small></span>`).join('');
-        let webHtml = h.web.map((u) => `<a class="port-tag web" href="${esc(u)}" target="_blank" rel="noopener">${esc(u.replace(/^https?:\/\/[^/:]+/, '').replace(/\/$/, '') || (u.startsWith('https') ? ':443' : ':80'))} ↗</a>`).join('');
-        return `<div class="scan-row"><span class="scan-ip num">${esc(h.ip)}</span><div class="scan-name"><strong>${esc(name || '—')}</strong>${c && h.name && h.name !== name ? `<small>${esc(h.name)}</small>` : ''}<div class="scan-tags">${tags}</div></div><span class="scan-mac num">${esc(h.mac ? NP.fmt.mac(h.mac) : '—')}</span><span class="scan-ping num">${h.ping == null ? '<span title="Ping’e yanıt vermedi, ARP ile bulundu">—</span>' : h.ping < 1 ? '<1 ms' : Math.round(h.ping) + ' ms'}</span><div class="scan-ports">${webHtml}${portsHtml}</div><div class="scan-act">${c ? `<button class="btn small" type="button" data-client="${esc(c.mac)}">Aç</button>` : ''}</div></div>`;
-      })
-      .join('');
-    return `<div class="scan-summary"><div><b>${r.hosts.length}</b> cihaz bulundu${secs ? ` · ${secs} sn` : ''} · ${esc(r.nets.map((n) => n.cidr.replace(/\.\d+\//, '.0/')).join(', '))}${sc.finished ? ` · ${new Date(sc.finished).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div><button class="btn small" type="button" data-scan-csv>CSV indir</button></div>
-      <div class="chip-row">${chip('all', 'Tümü', r.hosts.length)}${chip('unknown', 'NetOS’ta olmayan', unknown)}${r.portsChecked ? chip('web', 'Web arayüzü', web) : ''}${r.tcpChecked ? chip('ports', 'Açık port', ports) : ''}</div>
+    let where = r.range || r.nets.map((x) => x.cidr.replace(/\.\d+\//, '.0/')).join(', ');
+    return `<div class="scan-summary"><div><b>${n.all}</b> cihaz bulundu${secs ? ` · ${secs} sn` : ''} · ${esc(where)}${sc.finished ? ` · ${new Date(sc.finished).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}` : ''}</div><button class="btn small" type="button" data-scan-csv>${icon('save')}CSV indir</button></div>
+      <div class="scan-tools"><div class="chip-row">${chip('all', 'Tümü')}${chip('unknown', 'NetOS’ta olmayan')}${r.portsChecked ? chip('web', 'Web arayüzü') : ''}${r.tcpChecked ? chip('ports', 'Açık port') : ''}</div><input class="field scan-search" id="scan-search" type="search" placeholder="IP, ad veya MAC ara" value="${esc(state.scanQuery || '')}" autocomplete="off"></div>
       ${r.portsChecked && !r.tcpChecked ? '<p class="field-hint">Router’daki curl TCP port kontrolünü desteklemiyor; yalnız web arayüzleri kontrol edildi.</p>' : ''}
-      <div class="scan-table"><div class="scan-row scan-head"><span>IP</span><span>Ad</span><span>MAC</span><span>Ping</span><span>Servisler</span><span></span></div>${rows || '<div class="empty">Bu filtrede cihaz yok.</div>'}</div>
-      <p class="field-hint">Ping’e yanıt vermeyen cihazlar (ör. Windows güvenlik duvarı) ARP ile yine bulunur. Port kontrolü yalnız bağlantı açılıp açılmadığına bakar, veri göndermez.</p>`;
+      <div class="scan-table"><div class="scan-row scan-head"><span>${th('type', 'Tip')}</span><span>${th('ip', 'IP')}</span><span>${th('name', 'Ad')}</span><span>MAC</span><span>${th('ping', 'Ping')}</span><span>Servisler</span><span></span></div><div id="scan-rows">${scanRowsHtml(sc)}</div></div>
+      <p class="field-hint">Simgeler tahminidir (ad ve açık portlara göre). Ping’e yanıt vermeyen cihazlar ARP ile yine bulunur. Port kontrolü yalnız bağlantı açılıp açılmadığına bakar, veri göndermez.</p>`;
   }
+  const scanRowsHtml = (sc) => scanList(sc).map(scanRow).join('') || '<div class="empty">Bu filtrede cihaz yok.</div>';
   function redrawScanner() {
-    let el = document.getElementById('integ-scanner');
-    if (el) el.outerHTML = scannerCard();
+    let el = document.getElementById('scanner-box');
+    if (!el) return;
+    let q = document.activeElement?.id === 'scan-search';
+    el.outerHTML = scannerBox();
+    if (q) {
+      let s = document.getElementById('scan-search');
+      s?.focus();
+      s?.setSelectionRange(s.value.length, s.value.length);
+    }
   }
   function pollScan() {
     clearTimeout(state.scanTimer);
     if (!state.xScan?.running) return;
     state.scanTimer = setTimeout(async () => {
-      if (state.page !== '/integrations') return;
+      if (state.page !== '/scanner') return;
       try {
         state.xScan = await NP.getScan();
       } catch (e) {
@@ -859,10 +929,10 @@
     let r = state.xScan?.result;
     if (!r) return;
     let q = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
-    let lines = [['IP', 'Ad', 'MAC', 'Ping (ms)', 'NetOS kaydı', 'Web', 'Portlar'].map(q).join(',')];
+    let lines = [['IP', 'Ad', 'Tahmini tip', 'MAC', 'Ping (ms)', 'NetOS kaydı', 'Web', 'Portlar'].map(q).join(',')];
     r.hosts.forEach((h) => {
-      let c = h.mac ? state.clients.find((x) => x.mac === h.mac) : null;
-      lines.push([h.ip, c?.displayName || h.name, h.mac, h.ping ?? '', c ? 'evet' : 'hayır', h.web.join(' '), h.ports.map((p) => `${p.port}/${p.name}`).join(' ')].map(q).join(','));
+      let c = scanClient(h);
+      lines.push([h.ip, c?.displayName || h.name, NP.TYPE_LABELS[h.type] || h.type, h.mac, h.ping ?? '', c ? 'evet' : 'hayır', h.web.join(' '), h.ports.map((p) => `${p.port}/${p.name}`).join(' ')].map(q).join(','));
     });
     let url = URL.createObjectURL(new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' }));
     let a = document.createElement('a');
@@ -872,6 +942,74 @@
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+  // http üzerinde navigator.clipboard yok; eski yöntemle de dener
+  async function copyText(t) {
+    try {
+      await navigator.clipboard.writeText(t);
+      return true;
+    } catch (_) {
+      let ta = document.createElement('textarea');
+      ta.value = t;
+      ta.setAttribute('readonly', '');
+      ta.style.cssText = 'position:fixed;opacity:0;top:0;left:0';
+      document.body.appendChild(ta);
+      ta.select();
+      let ok = false;
+      try {
+        ok = document.execCommand('copy');
+      } catch (_) {}
+      ta.remove();
+      return ok;
+    }
+  }
+
+  /* ── Sistem > Güncelleme ── */
+  function updateCard() {
+    if (!state.xUpd && !state.xUpdError) loadX('xUpd', () => NP.getUpdate(), '/system');
+    let u = state.xUpd,
+      run = state.updRun;
+    let body;
+    if (run)
+      body = `<div class="upd-run"><div class="scan-bar indeterminate"><i></i></div><strong>${run.state === 'error' ? 'Güncelleme başarısız' : 'Güncelleniyor…'}</strong><p class="field-hint">${run.state === 'error' ? 'Ayrıntılar aşağıda. Mevcut sürüm çalışmaya devam ediyor.' : 'Router servisleri birkaç saniye yeniden başlayacak; sayfa kendiliğinden yenilenir. Sonrasında tekrar giriş yapmanız gerekebilir.'}</p>${run.log ? `<pre class="upd-log">${esc(run.log)}</pre>` : ''}${run.state === 'error' ? '<button class="btn small" type="button" data-upd-close>Kapat</button>' : ''}</div>`;
+    else if (state.xUpdError) body = `<div class="form-error">${esc(state.xUpdError)}</div>`;
+    else if (!u) body = '<div class="empty">Denetleniyor…</div>';
+    else
+      body = `<div class="upd-head"><div><small>Kurulu sürüm</small><b class="num">v${esc(u.current)}</b></div>${
+        u.available
+          ? `<span class="badge warn">Yeni sürüm: v${esc(u.latest)}</span>`
+          : u.latest
+            ? '<span class="badge ok">Güncel</span>'
+            : ''
+      }</div>
+      ${u.error ? `<p class="field-hint warn-text">${esc(u.error)}</p>` : ''}
+      ${u.available && u.notes ? `<details class="upd-notes" open><summary>v${esc(u.latest)} yenilikleri${u.published ? ` · ${new Date(u.published).toLocaleDateString('tr-TR')}` : ''}</summary><pre>${esc(u.notes)}</pre>${u.url ? `<a href="${esc(u.url)}" target="_blank" rel="noopener">GitHub’da gör ↗</a>` : ''}</details>` : ''}
+      <div class="toggle-line"><div><strong>Otomatik güncelle</strong><p>Her gece 04:30 civarı yeni sürüm varsa kurulur. Kapalıyken yalnız bildirim gönderilir (Telegram açıksa).</p></div><input class="switch" type="checkbox" data-upd-auto${u.auto ? ' checked' : ''}></div>
+      <div class="x-form-foot"><span class="field-hint">${u.checked ? `Son kontrol: ${new Date(u.checked).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''} · ${esc(u.repo)}</span><button class="btn small" type="button" data-upd-check>Denetle</button>${u.available ? `<button class="btn small primary" type="button" data-upd-apply>v${esc(u.latest)} sürümüne güncelle</button>` : ''}</div>`;
+    return `<section class="card span-7" id="upd-card">${cardHead('download', 'Güncelleme')}${body}</section>`;
+  }
+  function redrawUpdate() {
+    let el = document.getElementById('upd-card');
+    if (el) el.outerHTML = updateCard();
+  }
+  async function pollUpdate(t0 = Date.now()) {
+    let r = null;
+    try {
+      r = await NP.getUpdateStatus();
+    } catch (_) {}
+    if (r) {
+      state.updRun = { state: r.state, log: r.log };
+      if (r.state === 'done') {
+        toast(`NetOS v${r.current} kuruldu, sayfa yenileniyor…`);
+        return setTimeout(() => location.reload(), 1500);
+      }
+      if (r.state === 'error') return redrawUpdate();
+    } else if (Date.now() - t0 > 20000) {
+      // servisler yeniden başlarken istekler kısa süre yanıtsız kalır; bitince sayfayı tazele
+      return setTimeout(() => location.reload(), 8000);
+    }
+    redrawUpdate();
+    setTimeout(() => pollUpdate(t0), 2000);
   }
 
   function wanList() {
@@ -1156,7 +1294,7 @@
   }
   function drawWan(w) {
     let host = document.getElementById('drawer-host');
-    host.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open" role="dialog" aria-modal="true"><div class="drawer-head"><div><div class="eyebrow">İnternet hattı</div><h2>${esc(w.label || w.name)}</h2><p>${esc(w.device || '—')} · ${esc(w.protoLabel || w.proto)}</p></div><button class="icon-btn" data-close-drawer>${icon('x')}</button></div><form class="drawer-body" id="wan-form" data-wan="${esc(w.name)}"><div class="drawer-section"><div class="field-wrap"><label>Bağlantı tipi</label><select class="field" name="proto"><option value="pppoe" ${w.proto === 'pppoe' ? 'selected' : ''}>PPPoE</option><option value="dhcp" ${w.proto === 'dhcp' ? 'selected' : ''}>DHCP (otomatik)</option><option value="static" ${w.proto === 'static' ? 'selected' : ''}>Statik IP</option></select></div><div class="wan-pppoe" ${w.proto === 'pppoe' ? '' : 'hidden'}><div class="field-wrap"><label>Kullanıcı adı</label><input class="field" name="username" value="${esc(w.username || '')}"></div><div class="field-wrap"><label>Şifre</label><div class="password-line"><input class="field" name="password" type="password" placeholder="${w.passwordSet ? 'Kayıtlı — değiştirmek için yazın' : 'Şifre'}"><button class="btn small" type="button" data-wan-reveal>Göster</button></div><span class="field-hint">Boş bırakırsanız kayıtlı Şifre korunur.</span></div></div><div class="wan-static" ${w.proto === 'static' ? '' : 'hidden'}>${[
+    host.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open" role="dialog" aria-modal="true"><div class="drawer-head"><div><div class="eyebrow">İnternet hattı</div><h2>${esc(w.label || w.name)}</h2><p>${esc(w.device || '—')} · ${esc(w.protoLabel || w.proto)}</p></div><button class="icon-btn" data-close-drawer>${icon('x')}</button></div><form class="drawer-body" id="wan-form" data-wan="${esc(w.name)}"><div class="drawer-section"><div class="field-wrap"><label>Bağlantı tipi</label><select class="field" name="proto"><option value="pppoe" ${w.proto === 'pppoe' ? 'selected' : ''}>PPPoE</option><option value="dhcp" ${w.proto === 'dhcp' ? 'selected' : ''}>DHCP (otomatik)</option><option value="static" ${w.proto === 'static' ? 'selected' : ''}>Statik IP</option></select></div><div class="wan-pppoe" ${w.proto === 'pppoe' ? '' : 'hidden'}><div class="field-wrap"><label>Kullanıcı adı</label><input class="field" name="username" value="${esc(w.username || '')}"></div><div class="field-wrap"><label>Şifre</label><div class="password-line"><input class="field" name="password" type="password" placeholder="${w.passwordSet ? 'Kayıtlı — değiştirmek için yazın' : 'Şifre'}"></div><span class="field-hint">Boş bırakırsanız kayıtlı Şifre korunur.</span></div></div><div class="wan-static" ${w.proto === 'static' ? '' : 'hidden'}>${[
       ['ipaddr', 'IP adresi'],
       ['netmask', 'Alt ağ maskesi'],
       ['gateway', 'Ağ geçidi'],
@@ -1201,7 +1339,7 @@
       .map(([k, v]) => `<div><small>${k}</small><strong>${esc(v || '—')}</strong></div>`)
       .join(
         '',
-      )}</div></section><section class="card span-5">${cardHead('system', 'Y&#246;netim')}<button class="btn danger" data-reboot>Yeniden ba&#351;lat</button><p><a href="/cgi-bin/luci/">Geli&#351;mi&#351; ayarlar (LuCI) ↗</a></p><button class="btn" data-logout>&#199;&#305;k&#305;&#351; yap</button></section><section class="card span-12">${cardHead('system', 'Panel &#351;ifresi')}<form id="password-form"><div class="info-grid">${[
+      )}</div></section><section class="card span-5">${cardHead('system', 'Y&#246;netim')}<button class="btn danger" data-reboot>Yeniden ba&#351;lat</button><p><a href="/cgi-bin/luci/">Geli&#351;mi&#351; ayarlar (LuCI) ↗</a></p><button class="btn" data-logout>&#199;&#305;k&#305;&#351; yap</button></section>${updateCard()}<section class="card span-5">${cardHead('lock', 'Panel &#351;ifresi')}<form id="password-form"><div class="pw-grid">${[
       ['Mevcut &#351;ifre', 'old'],
       ['Yeni &#351;ifre', 'next'],
       ['Yeni &#351;ifre (tekrar)', 'repeat'],
@@ -1212,7 +1350,7 @@
       )
       .join(
         '',
-      )}</div><button class="btn" type="button" data-password-reveal>G&#246;ster</button><div class="password-strength" id="password-strength"></div><div class="form-error" id="password-error"></div><p class="field-hint">Bu &#351;ifre router'&#305;n root &#351;ifresidir; SSH ve LuCI giri&#351;i de de&#287;i&#351;ir.</p><button class="btn primary" id="password-save" type="submit" disabled>&#350;ifreyi kaydet</button></form></section></div>`;
+      )}</div><div class="password-strength" id="password-strength"></div><div class="form-error" id="password-error"></div><p class="field-hint">Bu &#351;ifre router'&#305;n root &#351;ifresidir; SSH ve LuCI giri&#351;i de de&#287;i&#351;ir.</p><button class="btn primary" id="password-save" type="submit" disabled>&#350;ifreyi kaydet</button></form></section></div>`;
   }
   function render() {
     root.innerHTML = nav();
@@ -1231,6 +1369,7 @@
     else if (state.page === '/stats') c.innerHTML = statsPage();
     else if (state.page === '/integrations') c.innerHTML = integrationsPage();
     else if (state.page === '/more') c.innerHTML = morePage();
+    else if (state.page === '/scanner') c.innerHTML = scannerPage();
     else {
       state.page = '/';
       c.innerHTML = state.overview ? home() : '';
@@ -1246,6 +1385,8 @@
       c.querySelector('.page-head')?.insertAdjacentHTML('afterend', newDevicesCard());
     }
     syncGlobalBand();
+    if (state.page === '/integrations' && state.integDrawer) drawIntegDrawer();
+    else state.integDrawer = null;
     if (state.page.startsWith('/devices/')) {
       let mac = decodeURIComponent(state.page.slice('/devices/'.length));
       openClient(mac, false);
@@ -1321,7 +1462,7 @@
     state.drawerWifi = section;
     const host = document.getElementById('drawer-host');
     const el = document.createElement('div');
-    el.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open" role="dialog" aria-modal="true" aria-labelledby="wifi-title"><div class="drawer-head"><div><div class="eyebrow">Kablosuz ağ ayarları · ${esc(w.bandLabel || NP.fmt.band(w.band))}</div><h2 id="wifi-title">${esc(w.ssid)}</h2><p>${w.clients} bağlı cihaz · Kanal ${esc(w.channel)}</p></div><button class="icon-btn" aria-label="Kapat" data-close-drawer>${icon('x')}</button></div><form class="drawer-body" id="wifi-form" data-section="${esc(w.section)}"><div class="drawer-section"><div class="field-wrap"><label for="wifi-ssid">Ağ adı (SSID)</label><input class="field" id="wifi-ssid" name="ssid" maxlength="32" value="${esc(w.ssid)}"></div><div class="field-wrap"><label for="wifi-key">Wi-Fi şifresi</label><div style="display:flex;gap:8px"><input class="field" id="wifi-key" name="key" type="password" value="${esc(w.key)}" style="flex:1"><button class="btn" type="button" data-reveal>Göster</button></div><span class="field-hint">Şifre 8–63 karakter olmalıdır.</span></div><div class="form-error" id="wifi-error" role="alert"></div><div class="alert" style="margin-top:12px"><span>ⓘ</span>Kaydederken Wi-Fi kısa süre kesilecek.</div></div></form><div class="drawer-foot"><span></span><div class="drawer-actions"><button class="btn" data-close-drawer>İptal</button><button class="btn primary" type="submit" form="wifi-form">Kaydet</button></div></div></aside>`;
+    el.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open" role="dialog" aria-modal="true" aria-labelledby="wifi-title"><div class="drawer-head"><div><div class="eyebrow">Kablosuz ağ ayarları · ${esc(w.bandLabel || NP.fmt.band(w.band))}</div><h2 id="wifi-title">${esc(w.ssid)}</h2><p>${w.clients} bağlı cihaz · Kanal ${esc(w.channel)}</p></div><button class="icon-btn" aria-label="Kapat" data-close-drawer>${icon('x')}</button></div><form class="drawer-body" id="wifi-form" data-section="${esc(w.section)}"><div class="drawer-section"><div class="field-wrap"><label for="wifi-ssid">Ağ adı (SSID)</label><input class="field" id="wifi-ssid" name="ssid" maxlength="32" value="${esc(w.ssid)}"></div><div class="field-wrap"><label for="wifi-key">Wi-Fi şifresi</label><div style="display:flex;gap:8px"><input class="field" id="wifi-key" name="key" type="password" value="${esc(w.key)}" style="flex:1"></div><span class="field-hint">Şifre 8–63 karakter olmalıdır.</span></div><div class="form-error" id="wifi-error" role="alert"></div><div class="alert" style="margin-top:12px"><span>ⓘ</span>Kaydederken Wi-Fi kısa süre kesilecek.</div></div></form><div class="drawer-foot"><span></span><div class="drawer-actions"><button class="btn" data-close-drawer>İptal</button><button class="btn primary" type="submit" form="wifi-form">Kaydet</button></div></div></aside>`;
     host.replaceChildren(...el.children);
   }
   // Global geri sayım bandı: İnternet sayfasında sayfa içi bant zaten var, orada gösterme
@@ -1636,6 +1777,7 @@
       state.drawerMac = null;
       state.drawerWifi = null;
       state.drawerWan = null;
+      state.integDrawer = null;
       if (state.page.startsWith('/devices/')) {
         history.replaceState({}, '', '#/devices');
         state.page = '/devices';
@@ -2565,22 +2707,32 @@
       xErr('x-notify-error', x.message);
     }
   });
-  // Entegrasyonlar: aç/kapa, ayarlara git, ağ tarayıcı
+  // Entegrasyonlar: aç/kapa, ayar penceresi
   root.addEventListener('change', async (e) => {
     let t = e.target;
     if (t.id === 'scan-ports') state.scanPorts = t.checked;
+    if (t.matches('[data-upd-auto]')) {
+      try {
+        await NP.setAutoUpdate(t.checked);
+        toast(t.checked ? 'Otomatik güncelleme açıldı' : 'Otomatik güncelleme kapatıldı');
+        if (state.xUpd) state.xUpd.auto = t.checked;
+      } catch (err) {
+        t.checked = !t.checked;
+        toast(err.message);
+      }
+      return;
+    }
     if (!t.matches('[data-integ]')) return;
     let id = t.dataset.integ,
       on = t.checked,
       x = INTEGRATIONS.find((i) => i.id === id);
     try {
       if (id === 'huawei') {
-        // açınca önce ayar formu görünür; bağlantı Kaydet ile etkinleşir (şifresiz deneme Huawei'yi kilitlemesin)
+        // açınca önce ayar penceresi; bağlantı Kaydet ile etkinleşir (şifresiz deneme Huawei'yi kilitlemesin)
         if (on) {
           state.integLocal = { ...state.integLocal, huawei: true };
           render();
-          document.getElementById('integ-huawei')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          return;
+          return openIntegDrawer('huawei');
         }
         if (!confirm('Huawei bağlantısı kapatılsın mı? Huawei Wi-Fi’si çalışmaya devam eder, yalnız NetOS’tan yönetilmez.')) return (t.checked = true);
         await NP.setHuaweiConfig({ enabled: false });
@@ -2595,34 +2747,139 @@
       }
       state.xInteg = null;
       toast(`${x.name} ${on ? 'etkinleştirildi' : 'kapatıldı'}`);
+      if (id === 'scanner' && on) {
+        state.xInteg = await NP.getIntegrations().catch(() => null);
+        return render();
+      }
       render();
+      if (on && id === 'cloudflare') openIntegDrawer('cloudflare');
     } catch (err) {
       t.checked = !on;
       toast(err.message);
     }
   });
+  root.addEventListener('input', (e) => {
+    if (e.target.id === 'scan-search') {
+      state.scanQuery = e.target.value;
+      let rows = document.getElementById('scan-rows');
+      if (rows && state.xScan?.result) rows.innerHTML = scanRowsHtml(state.xScan);
+    }
+    if (e.target.id === 'scan-range') state.scanRange = e.target.value;
+  });
+  root.addEventListener('submit', async (e) => {
+    if (e.target.id !== 'scan-form') return;
+    e.preventDefault();
+    let range = document.getElementById('scan-range').value.trim();
+    state.scanRange = range;
+    if (range && !/^[\d.\s/-]+$/.test(range)) {
+      state.scanStartError = 'Aralık anlaşılmadı. Örnek: 192.168.1.0/24, 192.168.1.10-50 ya da 192.168.1.20';
+      return redrawScanner();
+    }
+    try {
+      await NP.startScan({ ports: state.scanPorts !== false, range });
+      state.scanFilter = 'all';
+      state.scanStartError = '';
+      state.xScan = await NP.getScan();
+      state.xScanError = '';
+    } catch (err) {
+      state.scanStartError = err.message;
+    }
+    redrawScanner();
+    pollScan();
+  });
   root.addEventListener('click', async (e) => {
-    let b = e.target.closest('[data-integ-goto],[data-scan-start],[data-scan-filter],[data-scan-csv]');
+    // açık açılır menüleri dışarı tıklayınca kapat
+    root.querySelectorAll('details.pop[open]').forEach((d) => {
+      if (!d.contains(e.target)) d.removeAttribute('open');
+    });
+    let b = e.target.closest('[data-integ-open],[data-scan-filter],[data-scan-sort],[data-scan-csv],[data-copy],[data-wol],[data-upd-check],[data-upd-apply],[data-upd-close]');
     if (!b) return;
-    if (b.dataset.integGoto) return document.getElementById('integ-' + b.dataset.integGoto)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    if (b.dataset.scanFilter) {
-      state.scanFilter = b.dataset.scanFilter;
+    let d = b.dataset;
+    if (d.integOpen) return openIntegDrawer(d.integOpen);
+    if (d.scanFilter) {
+      state.scanFilter = d.scanFilter;
+      return redrawScanner();
+    }
+    if (d.scanSort) {
+      let s = state.scanSort || { key: 'ip', dir: 1 };
+      state.scanSort = { key: d.scanSort, dir: s.key === d.scanSort ? -s.dir : 1 };
       return redrawScanner();
     }
     if (b.matches('[data-scan-csv]')) return scanCsv();
-    if (b.matches('[data-scan-start]')) {
-      b.disabled = true;
-      try {
-        await NP.startScan({ ports: state.scanPorts !== false });
-        state.scanFilter = 'all';
-        state.xScan = await NP.getScan();
-        state.xScanError = '';
-      } catch (err) {
-        state.xScanError = err.message;
-      }
-      redrawScanner();
-      pollScan();
+    if (d.copy) {
+      e.preventDefault();
+      b.closest('details')?.removeAttribute('open');
+      return toast((await copyText(d.copy)) ? `Kopyalandı: ${d.copy}` : 'Kopyalanamadı');
     }
+    if (d.wol) {
+      b.closest('details')?.removeAttribute('open');
+      try {
+        await NP.wakeOnLan(d.wol);
+        toast('Uyandırma paketi gönderildi');
+      } catch (err) {
+        toast(err.message);
+      }
+      return;
+    }
+    if (b.matches('[data-upd-check]')) {
+      b.disabled = true;
+      b.textContent = 'Denetleniyor…';
+      try {
+        state.xUpd = await NP.getUpdate(true);
+        state.xUpdError = '';
+      } catch (err) {
+        state.xUpdError = err.message;
+      }
+      return redrawUpdate();
+    }
+    if (b.matches('[data-upd-apply]')) {
+      let v = state.xUpd?.latest;
+      if (!confirm(`NetOS v${v} indirilip kurulacak. Ayarlarınız ve cihaz kayıtlarınız korunur; panel birkaç saniye erişilemez olur. Devam edilsin mi?`)) return;
+      try {
+        await NP.applyUpdate();
+        state.updRun = { state: 'running', log: '' };
+        redrawUpdate();
+        pollUpdate();
+      } catch (err) {
+        toast(err.message);
+      }
+      return;
+    }
+    if (b.matches('[data-upd-close]')) {
+      state.updRun = null;
+      state.xUpd = null;
+      return redrawUpdate();
+    }
+  });
+  // Tüm şifre alanlarına göz düğmesi (göster / gizle)
+  function addEyes(scope) {
+    scope.querySelectorAll('input[type=password]:not([data-eyed])').forEach((i) => {
+      i.dataset.eyed = '1';
+      let w = document.createElement('span');
+      w.className = 'pw-wrap';
+      i.replaceWith(w);
+      w.append(i);
+      w.insertAdjacentHTML('beforeend', `<button type="button" class="pw-eye" data-eye aria-label="Şifreyi göster" title="Şifreyi göster">${icon('eye')}</button>`);
+    });
+  }
+  let eyeQueued = false;
+  new MutationObserver(() => {
+    if (eyeQueued) return;
+    eyeQueued = true;
+    queueMicrotask(() => {
+      eyeQueued = false;
+      addEyes(root);
+    });
+  }).observe(root, { childList: true, subtree: true });
+  root.addEventListener('click', (e) => {
+    let b = e.target.closest('[data-eye]');
+    if (!b) return;
+    e.preventDefault();
+    let i = b.parentElement.querySelector('input');
+    let show = i.type === 'password';
+    i.type = show ? 'text' : 'password';
+    b.innerHTML = icon(show ? 'eyeOff' : 'eye');
+    b.title = b.ariaLabel = show ? 'Şifreyi gizle' : 'Şifreyi göster';
   });
   // Sistem sayfası birkaç saniyede bir yenilenir; kullanıcı bir alana yazıyorsa yazdığını silme
   function formBusy() {

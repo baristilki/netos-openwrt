@@ -942,6 +942,18 @@
   }
   async function cfUnpublish(apiToken, hostname) { return npCall('cf_unpublish', { api_token: apiToken, hostname }); }
 
+  /* ── Güncelleme (GitHub Releases) ───────────────────────────────────────── */
+  // -> { current, latest, available, notes, published, url, repo, auto, checked(ms), error }
+  async function getUpdate(force = false) {
+    const r = await npCall('update_check', { force: !!force });
+    return { current: r.current, latest: r.latest, available: !!r.available, notes: r.notes || '', published: r.published || '',
+      url: r.url || '', repo: r.repo || '', auto: !!r.auto, checked: (r.checked || 0) * 1000, error: r.error || '' };
+  }
+  async function applyUpdate() { await npCall('update_apply', {}); }
+  // -> { state: idle|running|done|error, current, log }
+  async function getUpdateStatus() { return npCall('update_status', {}); }
+  async function setAutoUpdate(on) { await npCall('update_set', { auto: !!on }); }
+
   /* ── Entegrasyonlar ─────────────────────────────────────────────────────── */
   // -> { huawei, cloudflare, scanner, cloudflared (paket kurulu mu), curl }
   async function getIntegrations() {
@@ -953,7 +965,27 @@
   // Ağ tarayıcı: startScan({ports}) sonra getScan() ile durum/sonuç
   // -> { running, phase ('ping'|'ports'|'done'|'idle'|'error'), done, total, started(ms), finished(ms),
   //      result: { nets:[{name,cidr}], portsChecked, tcpChecked, hosts:[{ip, mac, name, net, ping, self, web:[url], ports:[{port,name}], randomMac}] } | null }
-  async function startScan(opts = {}) { await npCall('scan_start', { ports: opts.ports !== false }); }
+  // opts.range: '' (yerel ağlar) | '192.168.1.0/24' | '192.168.1.10-50' | '192.168.1.20'
+  async function startScan(opts = {}) { await npCall('scan_start', { ports: opts.ports !== false, range: String(opts.range || '').trim() }); }
+  async function wakeOnLan(mac) { await npCall('scan_wol', { mac }); }
+  // Taranan cihaz için tahmini tip: önce isim (cihaz listesiyle aynı kurallar), sonra açık portlar
+  function guessScanType(h) {
+    if (h.self) return 'router';
+    const byName = guessType({ name: h.name });
+    if (byName !== 'other') return byName;
+    const p = new Set(h.ports.map((x) => x.port));
+    const web = h.web.join(' ');
+    if (p.has(9100)) return 'printer';
+    if (p.has(554)) return 'camera';
+    if (p.has(8009)) return 'tv';
+    if (/:5000\/|:5001\//.test(web)) return 'nas';
+    if (/:8006\/|:32400\/|:8096\/|:8123\//.test(web) || p.has(1883)) return 'server';
+    if (p.has(3389) || (p.has(445) && p.has(139))) return 'pc';
+    if (p.has(22) && !h.randomMac) return 'server';
+    if (p.has(53) && h.web.length) return 'router';
+    if (h.randomMac) return 'phone';
+    return 'other';
+  }
   const ipNum = (ip) => ip.split('.').reduce((a, x) => a * 256 + Number(x), 0);
   async function getScan() {
     const r = await npCall('scan_status', {});
@@ -962,10 +994,11 @@
       running: !!r.running, phase: r.phase || 'idle', done: r.done || 0, total: r.total || 0,
       started: (r.started || 0) * 1000, finished: (r.finished || 0) * 1000,
       result: res ? {
-        nets: res.nets || [], portsChecked: !!res.ports_checked, tcpChecked: !!res.tcp_checked,
+        range: res.range || '', nets: res.nets || [], portsChecked: !!res.ports_checked, tcpChecked: !!res.tcp_checked,
         hosts: (res.hosts || []).map((h) => ({ ...h, mac: (h.mac || '').toLowerCase(), web: h.web || [], ports: h.ports || [],
           // yerel yönetilen (rastgele) MAC: ilk baytın 2. biti — telefonların "özel Wi-Fi adresi"
           randomMac: !!h.mac && (parseInt(h.mac.slice(0, 2), 16) & 2) === 2 }))
+          .map((h) => ({ ...h, type: guessScanType(h) }))
           .sort((a, b) => ipNum(a.ip) - ipNum(b.ip)),
       } : null,
     };
@@ -1321,6 +1354,7 @@
     const demoTz = { zonename: 'UTC', timezone: 'GMT0' };
     const demoInteg = { cloudflare: true, scanner: false };
     let demoScan = null;
+    const demoUpd = { current: '1.2.0', auto: false, t0: 0 };
     const demoCf = { installed: true, enabled: true, token_set: true, token_valid: true, tunnel_id: 'a1b2c3d4-1111-2222-3333-444455556666',
       running: true, connections: 4, hosts: [{ hostname: 'ha.ornek.com', service: 'http://192.168.1.199:8123' }], curl: true };
     const hwCfg = { dbho: false, bands: [
@@ -1451,7 +1485,7 @@
         });
         return r;
       },
-      'netpanel.status': () => ({ version: '1.1.0', offload: sqm.offload, offload_hw: false, table: true, counters: !sqm.offload }),
+      'netpanel.status': () => ({ version: demoUpd.current, offload: sqm.offload, offload_hw: false, table: true, counters: !sqm.offload }),
       'netpanel.clients': () => {
         tick();
         return {
@@ -1537,14 +1571,28 @@
       'netpanel.cf_status': () => JSON.parse(JSON.stringify(demoCf)),
       'netpanel.integ_get': () => ({ huawei: !!hw.enabled, cloudflare: demoInteg.cloudflare, scanner: demoInteg.scanner, cloudflared: true, curl: true }),
       'netpanel.integ_set': (a) => { if (a.id === 'huawei') hw.enabled = !!a.enabled; else demoInteg[a.id] = !!a.enabled; return { ok: true }; },
-      'netpanel.scan_start': (a) => { demoScan = { t0: Date.now(), ports: a.ports !== false }; return { ok: true }; },
+      'netpanel.scan_start': (a) => {
+        if (a.range && !/^(10|192\.168|172\.(1[6-9]|2\d|3[01]))\./.test(a.range)) return { ok: false, error: 'Yalnız yerel (özel) adresler taranabilir: 10.x, 172.16-31.x, 192.168.x' };
+        demoScan = { t0: Date.now(), ports: a.ports !== false, range: a.range || '' }; return { ok: true };
+      },
+      'netpanel.scan_wol': () => ({ ok: true }),
+      'netpanel.update_check': () => ({ current: demoUpd.current, latest: '1.3.0', available: demoUpd.current !== '1.3.0', notes: '- Ağ tarayıcıya özel IP aralığı\n- Wake-on-LAN\n- Hata düzeltmeleri', published: '2026-11-27T09:00:00Z', url: 'https://github.com/baristilki/netos-openwrt/releases/tag/v1.3.0', repo: 'baristilki/netos-openwrt', auto: demoUpd.auto, checked: Math.floor(Date.now() / 1000), error: '' }),
+      'netpanel.update_apply': () => { demoUpd.t0 = Date.now(); return { ok: true }; },
+      'netpanel.update_status': () => {
+        if (!demoUpd.t0) return { state: 'idle', current: demoUpd.current, log: '' };
+        const el = Date.now() - demoUpd.t0;
+        if (el < 4000) return { state: 'running', current: demoUpd.current, log: 'İndiriliyor: v1.3.0\nKuruluyor…\n' };
+        demoUpd.current = '1.3.0';
+        return { state: 'done', current: '1.3.0', log: 'Tamam: 1.3.0\n' };
+      },
+      'netpanel.update_set': (a) => { demoUpd.auto = !!a.auto; return { ok: true }; },
       'netpanel.scan_status': () => {
         if (!demoScan) return { running: false, phase: 'idle', done: 0, total: 0, started: 0, finished: 0, result: null };
         const el = Date.now() - demoScan.t0, t0 = Math.floor(demoScan.t0 / 1000);
         if (el < 3000) return { running: true, phase: 'ping', done: Math.min(254, Math.round((el / 3000) * 254)), total: 254, started: t0, finished: 0, result: null };
         if (demoScan.ports && el < 5000) return { running: true, phase: 'ports', done: Math.round(((el - 3000) / 2000) * 14), total: 14, started: t0, finished: 0, result: null };
         const H = (ip, mac, name, ping, web = [], ports = []) => ({ ip, mac, name, net: 'lan', ping, self: ip === '192.168.1.1', web, ports });
-        return { running: false, phase: 'done', done: 14, total: 14, started: t0, finished: t0 + 6, result: { nets: [{ name: 'lan', cidr: '192.168.1.1/24' }], ports_checked: demoScan.ports, tcp_checked: demoScan.ports, hosts: [
+        return { running: false, phase: 'done', done: 14, total: 14, started: t0, finished: t0 + 6, result: { range: demoScan.range, nets: [{ name: 'lan', cidr: '192.168.1.1/24' }], ports_checked: demoScan.ports, tcp_checked: demoScan.ports, hosts: [
           H('192.168.1.1', '', 'OpenWrt', 0.05, ['http://192.168.1.1/', 'https://192.168.1.1/'], [{ port: 22, name: 'SSH' }, { port: 53, name: 'DNS' }]),
           H('192.168.1.2', '00:e0:fc:12:34:01', 'HUAWEI-WiFi-AX2', 4.4, ['http://192.168.1.2/'], [{ port: 53, name: 'DNS' }]),
           H('192.168.1.10', 'bc:24:11:00:00:10', 'pve', 2.0, ['https://192.168.1.10:8006/'], [{ port: 22, name: 'SSH' }]),
@@ -1553,10 +1601,10 @@
           H('192.168.1.105', 'da:a1:19:aa:bb:cc', 'Galaxy-S24', 25.7),
           H('192.168.1.106', 'b0:be:76:42:e1:06', 'Oyun konsolu', 2.2),
           H('192.168.1.120', '04:d4:c4:11:22:33', 'DESKTOP-OYUN', 1.9, [], [{ port: 139, name: 'NetBIOS' }, { port: 445, name: 'SMB' }, { port: 3389, name: 'RDP' }]),
-          H('192.168.1.139', '02:00:00:aa:01:39', 'Kamera', 2.7, ['http://192.168.1.139/'], [{ port: 554, name: 'RTSP' }]),
-          H('192.168.1.148', '02:00:00:aa:01:48', 'BroadLink_WiFi_Device', 17.8),
-          H('192.168.1.183', '02:00:00:aa:01:83', 'IP-Telefon', 40.5, ['http://192.168.1.183/']),
-          H('192.168.1.197', '02:00:00:aa:01:97', '', null),
+          H('192.168.1.139', '00:1a:2b:aa:01:39', 'Kamera', 2.7, ['http://192.168.1.139/'], [{ port: 554, name: 'RTSP' }]),
+          H('192.168.1.148', '00:1a:2b:aa:01:48', 'BroadLink_WiFi_Device', 17.8),
+          H('192.168.1.183', '00:1a:2b:aa:01:83', 'IP-Telefon', 40.5, ['http://192.168.1.183/']),
+          H('192.168.1.197', '00:1a:2b:aa:01:97', '', null),
           H('192.168.1.199', 'bc:24:11:00:01:99', 'casaos', 3.2, ['http://192.168.1.199/', 'http://192.168.1.199:8123/'], [{ port: 22, name: 'SSH' }, { port: 445, name: 'SMB' }]),
           H('192.168.1.214', '9c:2a:70:4d:11:aa', 'Galaxy-A54', 31.0),
         ] } };
@@ -1633,7 +1681,7 @@
     getWanConfig, setWan, setWanMode, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
     getUsage, getPingHistory, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
-    getIntegrations, setIntegration, startScan, getScan,
+    getIntegrations, setIntegration, startScan, getScan, wakeOnLan, getUpdate, applyUpdate, getUpdateStatus, setAutoUpdate, TYPE_LABELS: TYPES,
     getSqm, setSqm, deleteSqm, setOffload, startSpeedtest, getSpeedtest, SQM_PRESETS, GRADE_TEXT, SPEED_SERVERS,
     TYPES,
     live, fmt, validate,

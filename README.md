@@ -2,7 +2,7 @@
 
 Keenetic tarzı, Türkçe, hafif bir yönetim paneli. Ek paket derlemeden her OpenWrt 22.03+ router'a kurulur.
 
-LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netpanel/`
+LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 (LuCI `http://<router-ip>/cgi-bin/luci/` adresinde çalışmaya devam eder.)
 
 ## Özellikler
@@ -38,7 +38,7 @@ Router IP'si farklıysa `192.168.1.1`'i değiştir.
    ```powershell
    ssh root@192.168.1.1 "sh /tmp/netpanel/install.sh"
    ```
-4. Tarayıcıda aç: `http://192.168.1.1/netpanel/` — root kullanıcısı ve router şifresiyle giriş.
+4. Tarayıcıda aç: `http://192.168.1.1/netos/` — root kullanıcısı ve router şifresiyle giriş.
 
 ## Entegrasyonlar
 NetOS → Entegrasyon menüsünden ihtiyacınız olanı açın; kapalı olanlar arayüzde görünmez.
@@ -47,7 +47,7 @@ NetOS → Entegrasyon menüsünden ihtiyacınız olanı açın; kapalı olanlar 
 |---|---|---|
 | Huawei WiFi AX2 / WS5200 | Wi-Fi aç/kapa, ağ adı, şifre, kanal, kanal analizi | Hazır |
 | Cloudflare Tunnel | Port açmadan dışarıdan erişim, DNS + Access otomatik kurulum | Hazır |
-| Ağ tarayıcı | Ağdaki tüm IP'leri tarar; bilinmeyen cihaz, açık port, web arayüzü | Hazır |
+| Ağ tarayıcı | IP tarama (özel aralık), tahmini cihaz tipi, açık port, web arayüzü, Wake-on-LAN, CSV | Hazır |
 | TP-Link Archer BE230 | Wi-Fi erişim noktası kontrolü | Geliştiriliyor |
 
 ### Huawei
@@ -64,8 +64,20 @@ Yerel ağdaki her adrese tek ping atar; ping'i engelleyen cihazlar ARP ile yine 
 ### Yeni entegrasyon eklemek
 1. Router tarafı: `router/files/usr/libexec/netpanel/<ad>.sh` (JSON üreten betik) ve
    `usr/libexec/rpcd/netpanel` içinde yeni metot + `acl.d/netpanel.json` izni.
-2. Veri katmanı: `www/netpanel/api.js` içinde fonksiyon + demo (mock) yanıtı.
-3. Arayüz: `www/netpanel/app.js` içinde `INTEGRATIONS` listesine kayıt ve ayar kartı.
+2. Veri katmanı: `www/netos/api.js` içinde fonksiyon + demo (mock) yanıtı.
+3. Arayüz: `www/netos/app.js` içinde `INTEGRATIONS` listesine kayıt ve ayar kartı.
+
+## Güncelleme
+NetOS → Sistem → Güncelleme: GitHub'daki en son sürümü denetler, tek tıkla kurar (ayarlar ve cihaz kayıtları korunur).
+"Otomatik güncelle" açıksa her gece 04:30 civarı kendisi kurar; kapalıysa Telegram'dan haber verir.
+
+### Yeni sürüm çıkarmak (geliştirici)
+1. `router/VERSION` ve `router/files/www/netos/app.js` içindeki `APP_VERSION` değerini artır (ör. `1.2.1`).
+2. Commit + push, ardından sürümü yayınla:
+   ```powershell
+   gh release create v1.2.1 --title "NetOS 1.2.1" --notes "- Değişiklik 1`n- Değişiklik 2"
+   ```
+Router'lar `releases/latest` etiketini okur; etiket `vX.Y.Z` biçiminde olmalı. Depo gizliyken router'lar sürümü göremez.
 
 ## Flow offloading uyarısı
 Firewall'da "Software/Hardware flow offloading" açıksa, kurulmuş bağlantılar nftables'ı atlar:
@@ -100,9 +112,9 @@ router/
     etc/init.d/netpanel            açılışta kuralları yükler
     etc/hotplug.d/dhcp/90-netpanel IP değişince kuralları tazeler
     etc/config/netpanel            cihaz kayıtları (isim, sınır, engel)
-    www/netpanel/                  arayüz (api.js = veri katmanı, app.js/style.css/index.html = görünüm)
+    www/netos/                  arayüz (api.js = veri katmanı, app.js/style.css/index.html = görünüm)
 ```
-Router olmadan önizleme: `router/files/www/netpanel/index.html` dosyasını tarayıcıda aç
+Router olmadan önizleme: `router/files/www/netos/index.html` dosyasını tarayıcıda aç
 (otomatik demo verisi, herhangi bir şifre).
 
 ## Katkı ve lisans

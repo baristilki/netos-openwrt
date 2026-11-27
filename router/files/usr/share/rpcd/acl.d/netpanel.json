@@ -20,7 +20,9 @@
 					"tz_get",
 					"cf_status",
 					"integ_get",
-					"scan_status"
+					"scan_status",
+					"update_check",
+					"update_status"
 				],
 				"system": [
 					"board",
@@ -93,7 +95,10 @@
 					"cf_publish",
 					"cf_unpublish",
 					"integ_set",
-					"scan_start"
+					"scan_start",
+					"scan_wol",
+					"update_apply",
+					"update_set"
 				],
 				"system": [
 					"reboot"

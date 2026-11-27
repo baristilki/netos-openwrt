@@ -133,8 +133,8 @@ status() {
 	hw=$(uci -q get firewall.@defaults[0].flow_offloading_hw)
 	nft list table inet netpanel >/dev/null 2>&1 && tbl=true || tbl=false
 	[ "$(cat /tmp/netpanel.counters 2>/dev/null)" = 1 ] && cnt=true || cnt=false
-	printf '{"version":"1.1.0","offload":%s,"offload_hw":%s,"table":%s,"counters":%s}\n' \
-		"$([ "$off" = 1 ] && echo true || echo false)" "$([ "$hw" = 1 ] && echo true || echo false)" "$tbl" "$cnt"
+	printf '{"version":"%s","offload":%s,"offload_hw":%s,"table":%s,"counters":%s}\n' \
+		"$(cat /usr/share/netpanel/version 2>/dev/null || echo 1.2.0)" "$([ "$off" = 1 ] && echo true || echo false)" "$([ "$hw" = 1 ] && echo true || echo false)" "$tbl" "$cnt"
 }
 
 np_host_section() { np_hosts | awk -F'\t' -v m="$1" '$2 == m { print $1; exit }'; }
@@ -408,7 +408,7 @@ hw_set() {
 
 case "$1" in
 list)
-	echo '{"clients":{},"status":{},"set_client":{"mac":"str","name":"str","static":true,"ip":"str","down":32,"up":32,"blocked":true,"type":"str","priority":true,"schedule":[]},"sysinfo":{},"set_password":{"old":"str","new":"str"},"web_scan":{},"forget_client":{"mac":"str"},"set_wifi":{"section":"str","ssid":"str","key":"str","disabled":true},"hw_status":{},"hw_set":{"band":"str","enabled":true},"hw_config":{"enabled":true,"host":"str","username":"str","password":"str"},"wan_config":{},"wan_set":{"name":"str","proto":"str","username":"str","password":"str","vlan":32,"dns":"str","mtu":32,"ipaddr":"str","netmask":"str","gateway":"str","enabled":true},"wan_mode":{"mode":"str","primary":"str","weights":{}},"wan_confirm":{},"wan_revert":{},"wan_reconnect":{"name":"str"},"wan_events":{},"sqm_config":{},"sqm_set":{"section":"str","interface":"str","enabled":true,"download":32,"upload":32,"script":"str","linklayer":"str","overhead":32},"sqm_delete":{"section":"str"},"set_offload":{"enabled":true},"speedtest_start":{"wan":"str","mode":"str","server":"str"},"speedtest_status":{},"hw_wifi_get":{},"hw_wifi_set":{"band":"str","ssid":"str","password":"str","channel":32,"hidden":true},"hw_wifi_scan":{},"usage_get":{"days":32},"ping_get":{"hours":32},"newdev_list":{},"newdev_ack":{},"notify_get":{},"notify_set":{"enabled":true,"token":"str","chat_id":"str","wan":true,"newdev":true,"block_new":true},"notify_test":{},"tz_get":{},"tz_set":{"zone":"str"},"backup_create":{},"backup_restore":{"data":"str"},"cf_status":{},"cf_set_token":{"token":"str"},"cf_set_enabled":{"enabled":true},"cf_lookup":{"api_token":"str"},"cf_publish":{"api_token":"str","account_id":"str","zone_id":"str","subdomain":"str","service":"str","access_email":"str"},"cf_unpublish":{"api_token":"str","hostname":"str"},"integ_get":{},"integ_set":{"id":"str","enabled":true},"scan_start":{"ports":true},"scan_status":{}}'
+	echo '{"clients":{},"status":{},"set_client":{"mac":"str","name":"str","static":true,"ip":"str","down":32,"up":32,"blocked":true,"type":"str","priority":true,"schedule":[]},"sysinfo":{},"set_password":{"old":"str","new":"str"},"web_scan":{},"forget_client":{"mac":"str"},"set_wifi":{"section":"str","ssid":"str","key":"str","disabled":true},"hw_status":{},"hw_set":{"band":"str","enabled":true},"hw_config":{"enabled":true,"host":"str","username":"str","password":"str"},"wan_config":{},"wan_set":{"name":"str","proto":"str","username":"str","password":"str","vlan":32,"dns":"str","mtu":32,"ipaddr":"str","netmask":"str","gateway":"str","enabled":true},"wan_mode":{"mode":"str","primary":"str","weights":{}},"wan_confirm":{},"wan_revert":{},"wan_reconnect":{"name":"str"},"wan_events":{},"sqm_config":{},"sqm_set":{"section":"str","interface":"str","enabled":true,"download":32,"upload":32,"script":"str","linklayer":"str","overhead":32},"sqm_delete":{"section":"str"},"set_offload":{"enabled":true},"speedtest_start":{"wan":"str","mode":"str","server":"str"},"speedtest_status":{},"hw_wifi_get":{},"hw_wifi_set":{"band":"str","ssid":"str","password":"str","channel":32,"hidden":true},"hw_wifi_scan":{},"usage_get":{"days":32},"ping_get":{"hours":32},"newdev_list":{},"newdev_ack":{},"notify_get":{},"notify_set":{"enabled":true,"token":"str","chat_id":"str","wan":true,"newdev":true,"block_new":true},"notify_test":{},"tz_get":{},"tz_set":{"zone":"str"},"backup_create":{},"backup_restore":{"data":"str"},"cf_status":{},"cf_set_token":{"token":"str"},"cf_set_enabled":{"enabled":true},"cf_lookup":{"api_token":"str"},"cf_publish":{"api_token":"str","account_id":"str","zone_id":"str","subdomain":"str","service":"str","access_email":"str"},"cf_unpublish":{"api_token":"str","hostname":"str"},"integ_get":{},"integ_set":{"id":"str","enabled":true},"scan_start":{"ports":true,"range":"str"},"scan_status":{},"scan_wol":{"mac":"str"},"update_check":{"force":true},"update_apply":{},"update_status":{},"update_set":{"auto":true}}'
 	;;
 call)
 	case "$2" in
@@ -437,7 +437,9 @@ call)
 	sysinfo) sysinfo ;;
 	set_password) set_password ;;
 	web_scan) web_scan ;;
-	scan_start | scan_status)
+	update_check | update_apply | update_status | update_set)
+		/usr/libexec/netpanel/update.sh "${2#update_}" ;;
+	scan_start | scan_status | scan_wol)
 		[ "$(uci -q get netpanel.integrations.scanner)" = 1 ] || np_err "Ağ tarayıcı entegrasyonu kapalı"
 		/usr/libexec/netpanel/scanner.sh "${2#scan_}" ;;
 	hw_config) hw_config ;;
