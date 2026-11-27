@@ -17,6 +17,7 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 - Yeni cihaz uyarısı (+ isteğe bağlı otomatik engel), Telegram bildirimi (hat koptu/geldi, yeni cihaz)
 - Saat dilimi seçimi, ayar yedeği indir / geri yükle
 - Port yönlendirme (hazır şablonlar, çakışma kontrolü) + UPnP; CGNAT / başka modem arkası uyarısı
+- Güvenlik duvarı: DMZ, internetten gelen ping'e yanıt; cihaz başına anlık bağlantılar
 - Yerel ağ: router IP'si, DHCP aralığı, kira süresi, cihazlara verilen DNS (IP değişiminde 3 dk geri alma)
 - WireGuard VPN sunucusu: cihaz ekle → QR kodu telefona okut
 - Wi-Fi'yi QR kod ile paylaşma

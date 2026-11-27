@@ -35,7 +35,8 @@
 					"sec_get",
 					"log_get",
 					"sysopt_get",
-					"tp_status"
+					"tp_status",
+					"conn_list"
 				],
 				"system": [
 					"board",
@@ -137,7 +138,8 @@
 					"sysopt_set",
 					"tp_config",
 					"tp_set",
-					"tp_wifi_set"
+					"tp_wifi_set",
+					"fw_set"
 				],
 				"system": [
 					"reboot"

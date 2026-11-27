@@ -65,6 +65,8 @@ notify_get() {
 	json_add_boolean token_set "$([ -n "$(uci -q get netpanel.notify.token)" ] && echo 1 || echo 0)"
 	json_add_boolean wan "$([ "$(uci -q get netpanel.notify.wan)" = 0 ] && echo 0 || echo 1)"
 	json_add_boolean newdev "$([ "$(uci -q get netpanel.notify.newdev)" = 0 ] && echo 0 || echo 1)"
+	json_add_boolean presence "$([ "$(uci -q get netpanel.notify.presence)" = 0 ] && echo 0 || echo 1)"
+	json_add_boolean system "$([ "$(uci -q get netpanel.notify.system)" = 0 ] && echo 0 || echo 1)"
 	json_add_boolean block_new "$([ "$(uci -q get netpanel.main.block_new)" = 1 ] && echo 1 || echo 0)"
 	json_add_boolean curl "$(command -v curl >/dev/null && echo 1 || echo 0)"
 	json_dump
@@ -85,7 +87,7 @@ notify_set() {
 		echo "$v" | grep -qE '^-?[0-9]{3,20}$' || err "Chat ID sayı olmalı (gruplar için eksi ile başlar)"
 		uci set "netpanel.notify.chat_id=$v"
 	fi
-	for k in enabled wan newdev; do
+	for k in enabled wan newdev presence system; do
 		if json_get_type t "$k"; then json_get_var v "$k"; [ "$v" = 1 ] && uci set "netpanel.notify.$k=1" || uci set "netpanel.notify.$k=0"; fi
 	done
 	if json_get_type t block_new; then
@@ -196,6 +198,44 @@ integ_set() {
 	echo '{"ok":true}'
 }
 
+# ── bir cihazın anlık bağlantıları (conntrack) ──
+conn_list() {
+	local input ip
+	input=$(cat); json_load "$input" 2>/dev/null
+	json_get_var ip ip
+	np_valid_ip "$ip" || err "Geçersiz IP"
+	[ -r /proc/net/nf_conntrack ] || err "Bağlantı takibi (conntrack) okunamıyor"
+	# hedef+port+protokol başına: bağlantı sayısı, toplam bayt
+	awk -v ip="$ip" '$1 == "ipv4" {
+		src = ""; dst = ""; dp = ""; b = 0; n = 0
+		for (i = 1; i <= NF; i++) {
+			if ($i ~ /^src=/ && src == "") src = substr($i, 5)
+			else if ($i ~ /^dst=/ && dst == "") dst = substr($i, 5)
+			else if ($i ~ /^dport=/ && dp == "") dp = substr($i, 7)
+			else if ($i ~ /^bytes=/) b += substr($i, 7)
+		}
+		if (src != ip) next
+		k = dst " " $3 " " dp; c[k]++; by[k] += b
+	} END { for (k in c) print by[k], c[k], k }' /proc/net/nf_conntrack | sort -rn | head -n 40 >/tmp/netpanel-conn.$$
+	# ters DNS adları: paralel (yerel/özel adresler hariç)
+	mkdir -p /tmp/netpanel-ptr.$$
+	for dst in $(awk '{ print $3 }' /tmp/netpanel-conn.$$ | sort -u | head -n 25); do
+		case "$dst" in 192.168.* | 10.* | 172.1[6-9].* | 172.2[0-9].* | 172.3[01].* | 22[4-9].* | 23[0-9].* | 255.*) continue ;; esac
+		(nslookup "$dst" 127.0.0.1 2>/dev/null | sed -n 's/.*name = \([^ ]*[^.]\)\.*$/\1/p' | head -1 >"/tmp/netpanel-ptr.$$/$dst") &
+	done
+	wait
+	printf '{"items":['
+	first=1
+	while read -r b c dst proto dp; do
+		name=$(cat "/tmp/netpanel-ptr.$$/$dst" 2>/dev/null)
+		[ $first = 1 ] || printf ','
+		first=0
+		printf '{"dst":"%s","proto":"%s","port":%d,"count":%d,"bytes":%s,"name":"%s"}' "$dst" "$proto" "${dp:-0}" "$c" "$b" "$(printf '%s' "$name" | tr -dc 'A-Za-z0-9._-')"
+	done </tmp/netpanel-conn.$$
+	rm -rf /tmp/netpanel-conn.$$ /tmp/netpanel-ptr.$$
+	printf '],"total":%d}\n' "$(awk -v ip="$ip" '$1 == "ipv4" && index($0, "src=" ip " ") { n++ } END { print n + 0 }' /proc/net/nf_conntrack)"
+}
+
 # ── TP-Link bağlantı ayarları (şifre yalnız router'da, geri gönderilmez) ──
 tp_config() {
 	local input t v
@@ -231,6 +271,6 @@ st_sched_set() {
 }
 
 case "$1" in
-usage_get | ping_get | newdev_list | newdev_ack | notify_get | notify_set | notify_test | tz_get | tz_set | backup_create | backup_restore | integ_get | integ_set | st_sched_get | st_sched_set | tp_config) "$1" ;;
+usage_get | ping_get | newdev_list | newdev_ack | notify_get | notify_set | notify_test | tz_get | tz_set | backup_create | backup_restore | integ_get | integ_set | st_sched_get | st_sched_set | tp_config | conn_list) "$1" ;;
 *) echo "kullanım: $0 <komut>" >&2; exit 1 ;;
 esac

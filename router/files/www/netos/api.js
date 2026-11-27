@@ -871,7 +871,7 @@
   // Telegram bildirimi: { enabled, chatId, tokenSet, wan, newdev, blockNew, curl }
   async function getNotify() {
     const r = await npCall('notify_get', {});
-    return { enabled: !!r.enabled, chatId: r.chat_id || '', tokenSet: !!r.token_set, wan: !!r.wan, newdev: !!r.newdev, blockNew: !!r.block_new, curl: !!r.curl };
+    return { enabled: !!r.enabled, chatId: r.chat_id || '', tokenSet: !!r.token_set, wan: !!r.wan, newdev: !!r.newdev, presence: r.presence !== false, system: r.system !== false, blockNew: !!r.block_new, curl: !!r.curl };
   }
   // patch: { enabled, token ('' = değiştirme), chatId, wan, newdev, blockNew }
   async function setNotify(patch) {
@@ -879,7 +879,7 @@
     if (patch.enabled != null) a.enabled = !!patch.enabled;
     if (patch.token) a.token = String(patch.token).trim();
     if (patch.chatId != null && patch.chatId !== '') a.chat_id = String(patch.chatId).trim();
-    ['wan', 'newdev'].forEach((k) => { if (patch[k] != null) a[k] = !!patch[k]; });
+    ['wan', 'newdev', 'presence', 'system'].forEach((k) => { if (patch[k] != null) a[k] = !!patch[k]; });
     if (patch.blockNew != null) a.block_new = !!patch.blockNew;
     await npCall('notify_set', a);
   }
@@ -957,7 +957,7 @@
     return {
       rules: (r.rules || []).map((x) => ({ id: x.id, name: x.name, proto: x.proto, extPort: x.ext_port, ip: x.ip, intPort: x.int_port, enabled: !!x.enabled })),
       upnp: { ...(r.upnp || {}), leases: (r.upnp?.leases || []).map((l) => ({ proto: l.proto, extPort: l.ext_port, ip: l.ip, intPort: l.int_port, desc: l.desc })) },
-      wans: mapWans(r.wans), lan: r.lan || {},
+      wans: mapWans(r.wans), lan: r.lan || {}, fw: { dmzIp: r.fw?.dmz_ip || '', ping: !!r.fw?.ping },
     };
   }
   // rule: { id?, name, proto: 'tcp'|'udp'|'tcp udp', extPort, intPort, ip, enabled }
@@ -965,6 +965,19 @@
     return npCall('pf_set', { id: x.id || '', name: x.name || '', proto: x.proto || 'tcp udp', ext_port: String(x.extPort || ''), int_port: String(x.intPort || ''), ip: x.ip, enabled: x.enabled !== false });
   }
   async function deletePortForward(id) { await npCall('pf_delete', { id }); }
+  // { ping?: bool, dmzIp?: '' (kapat) | ip }
+  async function setFirewall(o) {
+    const a = {};
+    if (o.ping != null) a.ping = !!o.ping;
+    if (o.dmzIp != null) a.dmz_ip = String(o.dmzIp).trim();
+    await npCall('fw_set', a);
+  }
+  // Bir cihazın anlık bağlantıları -> { total, items:[{dst, proto, port, count, bytes, name, service}] }
+  const PORT_NAMES = { 80: 'Web (HTTP)', 443: 'Web (HTTPS)', 53: 'DNS', 853: 'DNS (şifreli)', 123: 'Saat (NTP)', 22: 'SSH', 25: 'E-posta', 465: 'E-posta', 587: 'E-posta', 993: 'E-posta (IMAP)', 5228: 'Google bildirim', 5223: 'Apple bildirim', 3478: 'Görüntülü arama (STUN)', 19302: 'Google Meet', 1900: 'Ağ keşfi (SSDP)', 5353: 'Ağ keşfi (mDNS)', 3074: 'Xbox Live', 27015: 'Steam oyun', 8801: 'Zoom', 1935: 'Canlı yayın' };
+  async function getConnections(ip) {
+    const r = await npCall('conn_list', { ip });
+    return { total: r.total || 0, items: (r.items || []).map((x) => ({ ...x, service: PORT_NAMES[x.port] || (x.proto + '/' + x.port) })) };
+  }
   async function setUpnp(enabled) { await npCall('upnp_set', { enabled: !!enabled }); }
 
   /* ── Yerel ağ + DHCP ───────────────────────────────────────────────────── */
@@ -1492,7 +1505,8 @@
       { t: nowSec() - 1800, mac: '9c:2a:70:4d:11:aa', ip: '192.168.1.214', hostname: 'Galaxy-A54', unseen: true },
       { t: nowSec() - 86400 * 2, mac: '00:1e:06:33:aa:10', ip: '192.168.1.230', hostname: '', unseen: false },
     ] };
-    const demoNotify = { enabled: false, chat_id: '', token_set: false, wan: true, newdev: true, curl: true };
+    const demoNotify = { enabled: false, chat_id: '', token_set: false, wan: true, newdev: true, presence: true, system: true, curl: true };
+    const demoFw = { dmz_ip: '', ping: true };
     const demoTz = { zonename: 'UTC', timezone: 'GMT0' };
     const demoTp = { enabled: false, host: '', username: 'admin', pw: false, bands: { '2g': { enabled: true, ssid: 'TP-Link_BE230' }, '5g': { enabled: true, ssid: 'TP-Link_BE230_5G' } } };
     const demoInteg = { cloudflare: true, scanner: false, vpn: false, adguard: false };
@@ -1779,7 +1793,9 @@
       'netpanel.scan_wol': () => ({ ok: true }),
       'netpanel.pf_list': () => ({ rules: JSON.parse(JSON.stringify(demoPf.rules)), upnp: { installed: demoPkg.upnp, enabled: demoUpnp.enabled, running: demoUpnp.enabled,
         leases: demoUpnp.enabled ? [{ proto: 'udp', ext_port: '3074', ip: '192.168.1.106', int_port: '3074', desc: 'Xbox Live' }, { proto: 'tcp', ext_port: '51413', ip: '192.168.1.120', int_port: '51413', desc: 'qBittorrent' }] : [] },
-        wans: demoWans, lan: { ip: demoLan.ip, prefix: 24 } }),
+        wans: demoWans, lan: { ip: demoLan.ip, prefix: 24 }, fw: { ...demoFw } }),
+      'netpanel.fw_set': (a) => { if (a.ping != null) demoFw.ping = a.ping; if (a.dmz_ip != null) demoFw.dmz_ip = a.dmz_ip; return { ok: true }; },
+      'netpanel.conn_list': () => ({ total: 37, items: [['149.154.167.99', 'tcp', 443, 3, 9078934, ''], ['142.250.187.110', 'udp', 443, 2, 6868939, 'sof02s45-in-f14.1e100.net'], ['104.18.32.47', 'tcp', 443, 3, 2763660, ''], ['17.253.53.207', 'tcp', 5223, 1, 52300, 'usdal2-vip-bx-001.aaplimg.com'], ['192.168.1.1', 'udp', 53, 12, 18233, ''], ['162.159.200.1', 'udp', 123, 1, 152, 'time.cloudflare.com']].map(([dst, proto, port, count, bytes, name]) => ({ dst, proto, port, count, bytes, name })) }),
       'netpanel.pf_set': (a) => {
         if (!/^\d{1,5}(-\d{1,5})?$/.test(a.ext_port)) return { ok: false, error: 'Dış port 1-65535 arasında olmalı (aralık için 5000-5010)' };
         if (!/^192\.168\.1\.\d+$/.test(a.ip) || a.ip === '192.168.1.1') return { ok: false, error: 'Hedef IP yerel ağda olmalı (192.168.1.1/24)' };
@@ -1926,7 +1942,7 @@
     getWanConfig, setWan, setWanMode, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
     getUsage, getPingHistory, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
     downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
-    getPortForwards, savePortForward, deletePortForward, setUpnp, getLan, setLan, confirmLan, revertLan,
+    getPortForwards, savePortForward, deletePortForward, setUpnp, setFirewall, getConnections, getLan, setLan, confirmLan, revertLan,
     getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,
     getTplink, setTplinkConfig, setTplinkBand, saveTplinkWifi,
     getAdguard, setupAdguard, enableAdguard, connectAdguard, setAdguardProtection, getAdguardServices, getAdguardGlobal, setAdguardGlobal,

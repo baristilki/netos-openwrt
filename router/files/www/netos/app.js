@@ -728,6 +728,8 @@
       </details>
       <div class="toggle-line"><div><strong>Hat koptu / geldi</strong></div><input class="switch" type="checkbox" name="wan"${n.wan ? ' checked' : ''}></div>
       <div class="toggle-line"><div><strong>Yeni cihaz katıldı</strong></div><input class="switch" type="checkbox" name="newdev"${n.newdev ? ' checked' : ''}></div>
+      <div class="toggle-line"><div><strong>Cihaz eve geldi / ayrıldı</strong><p>Hangi cihazların takip edileceği cihaz panelinden seçilir.</p></div><input class="switch" type="checkbox" name="presence"${n.presence ? ' checked' : ''}></div>
+      <div class="toggle-line"><div><strong>Sistem uyarıları</strong><p>Sıcaklık, depolama, bellek; NetOS güncellemeleri.</p></div><input class="switch" type="checkbox" name="system"${n.system ? ' checked' : ''}></div>
       <div class="toggle-line"><div><strong>Yeni cihazları otomatik engelle</strong><p>Tanımadığınız cihaz, siz izin verene kadar internete çıkamaz.</p></div><input class="switch" type="checkbox" name="blockNew"${n.blockNew ? ' checked' : ''}></div>
       ${n.curl ? '' : '<p class="form-error">curl kurulu değil; bildirimler gönderilemez.</p>'}
       <div class="x-form-foot"><span class="form-error" id="x-notify-error"></span><button type="button" class="btn small" data-x-testnotify>Test mesajı</button><button class="btn small primary" type="submit">Kaydet</button></div></form></section>`;
@@ -1080,7 +1082,7 @@
     let p = state.xPanel,
       host = document.getElementById('drawer-host');
     if (!p || !host) return;
-    let v = { pf: pfPanel, qr: qrPanel, peer: peerPanel, tpwifi: tpWifiPanel }[p.kind]?.(p);
+    let v = { pf: pfPanel, qr: qrPanel, peer: peerPanel, tpwifi: tpWifiPanel, conns: connsPanel }[p.kind]?.(p);
     if (!v) return;
     let prev = host.querySelector('.drawer-body')?.scrollTop || 0;
     host.innerHTML = `<div class="drawer-backdrop open" data-close-drawer></div><aside class="drawer open x-panel" role="dialog" aria-modal="true" aria-label="${esc(v.title)}"><div class="drawer-head"><div class="integ-top"><span class="integ-icon">${icon(v.icon)}</span><div><div class="eyebrow">${esc(v.eyebrow)}</div><h2>${esc(v.title)}</h2>${v.sub ? `<p>${esc(v.sub)}</p>` : ''}</div></div><button class="icon-btn" type="button" aria-label="Kapat" data-close-drawer>${icon('x')}</button></div><div class="drawer-body">${v.body}</div></aside>`;
@@ -1159,7 +1161,7 @@
       ? pkgGate('upnp', 'UPnP', '~150 KB')
       : `<div class="toggle-line"><div><strong>UPnP</strong><p>Oyun konsolları ve programlar gereken portu kendisi açar (ör. Xbox “NAT türü: Açık”). Güvenlik için yalnız ihtiyacınız varsa açın.</p></div><input class="switch" type="checkbox" data-upnp${u.enabled ? ' checked' : ''}></div>
         ${u.enabled ? (u.leases.length ? `<h3 class="x-sub">Programların açtığı portlar</h3><div class="pf-list">${u.leases.map((l) => { let c = clientByIp(l.ip); return `<div class="pf-row"><div class="pf-name"><strong>${esc(l.desc || 'Program')}</strong><small>${esc(l.proto.toUpperCase())}</small></div><div class="pf-map"><span class="port-tag big">${esc(l.extPort)}</span><span class="pf-arrow">→</span><span class="pf-target">${c ? esc(c.displayName) + ' ' : ''}<span class="num">${esc(l.ip)}:${esc(l.intPort)}</span></span></div><div class="pf-act"></div></div>`; }).join('')}</div>` : '<p class="field-hint">Şu an UPnP ile açılmış port yok.</p>') : ''}`;
-    return `${head}${wanWarning(d.wans, 'port yönlendirme')}<div class="grid"><section class="card span-12">${cardHead('shield', 'Kurallar')}${rows ? `<div class="pf-list">${rows}</div>` : '<div class="empty">Henüz kural yok. “Kural ekle” ile bir cihaza port açın.</div>'}</section><section class="card span-12">${cardHead('plug', 'UPnP (otomatik port açma)')}${upnpBody}</section></div>`;
+    return `${head}${wanWarning(d.wans, 'port yönlendirme')}<div class="grid"><section class="card span-12">${cardHead('shield', 'Kurallar')}${rows ? `<div class="pf-list">${rows}</div>` : '<div class="empty">Henüz kural yok. “Kural ekle” ile bir cihaza port açın.</div>'}</section><section class="card span-12">${cardHead('plug', 'UPnP (otomatik port açma)')}${upnpBody}</section>${fwCard(d)}</div>`;
   }
   function pfPanel(p) {
     let r = p.rule || { proto: 'tcp', extPort: '', intPort: '', ip: p.ip || '', name: '', enabled: true };
@@ -1177,6 +1179,39 @@
       <div class="x-form-foot"><button type="button" class="btn" data-close-drawer>İptal</button><button class="btn primary" type="submit">${r.id ? 'Kaydet' : 'Kuralı ekle'}</button></div>
     </form>`;
     return { icon: 'shield', eyebrow: 'Port yönlendirme', title: r.id ? 'Kuralı düzenle' : 'Yeni kural', body };
+  }
+
+  function fwCard(d) {
+    let devs = state.clients.filter((c) => c.ip).sort((a, b) => a.displayName.localeCompare(b.displayName, 'tr'));
+    return `<section class="card span-12">${cardHead('shield', 'Güvenlik duvarı')}
+      <div class="toggle-line"><div><strong>İnternetten gelen ping’e yanıt ver</strong><p>Kapalıyken router internetten “görünmez”; bazı operatör/oyun bağlantı testleri ping ister.</p></div><input class="switch" type="checkbox" data-fw-ping${d.fw.ping ? ' checked' : ''}></div>
+      <form id="dmz-form" class="x-form"><div class="field-wrap"><label>DMZ (tüm gelen bağlantıları tek cihaza yönlendir)</label><div class="x-inline"><select class="field" name="dmz"><option value="">Kapalı</option>${devs.map((c) => `<option value="${esc(c.ip)}"${c.ip === d.fw.dmzIp ? ' selected' : ''}>${esc(c.displayName)} — ${esc(c.ip)}</option>`).join('')}${d.fw.dmzIp && !devs.some((c) => c.ip === d.fw.dmzIp) ? `<option value="${esc(d.fw.dmzIp)}" selected>${esc(d.fw.dmzIp)}</option>` : ''}</select><button class="btn small" type="submit">Kaydet</button></div></div>
+      <p class="field-hint warn-text">DMZ’deki cihaz internete tamamen açık olur; yalnız oyun konsolu gibi gerçekten gerekiyorsa ve cihaza sabit IP vererek kullanın. Port kuralları DMZ’den önce uygulanır.</p></form></section>`;
+  }
+  // Cihazın anlık bağlantıları
+  function connsPanel(p) {
+    let c = state.clients.find((x) => x.mac === p.mac) || {};
+    let r = p.data;
+    let body = p.error
+      ? `<div class="form-error">${esc(p.error)}</div>`
+      : !r
+        ? '<div class="empty">Yükleniyor…</div>'
+        : !r.items.length
+          ? '<div class="empty">Şu an açık bağlantı yok.</div>'
+          : `<p class="field-hint">${r.total} açık bağlantı · en çok veri aktaranlar üstte. Adlar, hedefin ters DNS kaydıdır (her zaman olmayabilir).</p><div class="pf-list">${r.items
+              .map((x) => `<div class="pf-row conn-row"><div class="pf-name"><strong class="num">${esc(x.name || x.dst)}</strong><small>${x.name ? esc(x.dst) + ' · ' : ''}${esc(x.service)}${x.count > 1 ? ` · ${x.count} bağlantı` : ''}</small></div><div class="vpn-meta num">${NP.fmt.bytes(x.bytes)}</div><div class="pf-act"></div></div>`)
+              .join('')}</div>`;
+    return { icon: 'chart', eyebrow: 'Anlık bağlantılar', title: c.displayName || p.mac, sub: c.ip || '', body: `${body}<div class="x-form-foot"><button class="btn small" type="button" data-conns="${esc(p.mac)}">Yenile</button></div>` };
+  }
+  async function loadConns(mac) {
+    let c = state.clients.find((x) => x.mac === mac);
+    openXPanel({ kind: 'conns', mac });
+    try {
+      let data = await NP.getConnections(c.ip);
+      if (state.xPanel?.kind === 'conns' && state.xPanel.mac === mac) openXPanel({ kind: 'conns', mac, data });
+    } catch (e) {
+      if (state.xPanel?.kind === 'conns') openXPanel({ kind: 'conns', mac, error: e.message });
+    }
   }
 
   /* ── Yerel ağ (LAN) + DHCP ── */
@@ -1375,6 +1410,7 @@
     let sec = document.createElement('div');
     sec.className = 'drawer-section x-devx';
     sec.innerHTML = `<div class="toggle-line"><div><strong>${icon('bell')} Eve gelince / ayrılınca bildir</strong><p>Bu cihaz ağa bağlanınca ya da 10 dakika görünmeyince Telegram’dan mesaj gelir${state.xNotify && !state.xNotify.enabled ? ' (Telegram bildirimleri şu an kapalı: Sistem > Bildirimler)' : ''}.</p></div><input class="switch" type="checkbox" data-presence="${esc(c.mac)}"${c.presence ? ' checked' : ''}></div>`;
+    if (c.online && c.ip) sec.insertAdjacentHTML('beforeend', `<button type="button" class="btn small" data-conns="${esc(c.mac)}">${icon('chart')}Anlık bağlantılar</button>`);
     body.appendChild(sec);
     if (integOn('adguard') && state.xAg?.active) {
       let f = document.createElement('div');
@@ -3236,6 +3272,8 @@
         chatId: v('chatId').value.trim(),
         wan: v('wan').checked,
         newdev: v('newdev').checked,
+        presence: v('presence').checked,
+        system: v('system').checked,
         blockNew: v('blockNew').checked,
       });
       state.xNotify = null;
@@ -3830,6 +3868,36 @@
       err(x.message);
     }
     done();
+  });
+  // ── Güvenlik duvarı + anlık bağlantılar: olaylar ──
+  root.addEventListener('click', (e) => {
+    let b = e.target.closest('[data-conns]');
+    if (b) loadConns(b.dataset.conns);
+  });
+  root.addEventListener('change', async (e) => {
+    let t = e.target;
+    if (!t.matches('[data-fw-ping]')) return;
+    try {
+      await NP.setFirewall({ ping: t.checked });
+      toast(t.checked ? 'Ping’e yanıt veriliyor' : 'Router internetten ping’e yanıt vermiyor');
+    } catch (x) {
+      t.checked = !t.checked;
+      toast(x.message);
+    }
+  });
+  root.addEventListener('submit', async (e) => {
+    if (e.target.id !== 'dmz-form') return;
+    e.preventDefault();
+    let ip = e.target.elements.dmz.value;
+    if (ip && !confirm(`${ip} adresli cihaz internete tamamen açılacak (DMZ). Emin misiniz?`)) return;
+    try {
+      await NP.setFirewall({ dmzIp: ip });
+      toast(ip ? `DMZ: ${ip}` : 'DMZ kapatıldı');
+    } catch (x) {
+      toast(x.message);
+    }
+    state.xPf = null;
+    render();
   });
   // ── TP-Link: olaylar ──
   root.addEventListener('change', async (e) => {

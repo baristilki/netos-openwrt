@@ -82,6 +82,42 @@ function wanInfo() {
 	return res;
 }
 
+// ══ Güvenlik duvarı: DMZ + internetten ping ══
+function fwInfo() {
+	let dmz = null, ping = null;
+	ctx.foreach('firewall', 'redirect', (s) => { if (s.name == 'NetOS-DMZ') dmz = s; });
+	ctx.foreach('firewall', 'rule', (s) => { if (s.name == 'Allow-Ping' && s.src == 'wan') ping = s; });
+	return { dmz_ip: dmz && dmz.enabled != '0' ? dmz.dest_ip : '', ping: ping ? ping.enabled != '0' : false };
+}
+function fw_set() {
+	const a = input();
+	if (a.ping != null) {
+		let id = null;
+		ctx.foreach('firewall', 'rule', (s) => { if (s.name == 'Allow-Ping' && s.src == 'wan') id = s['.name']; });
+		if (!id) {
+			id = ctx.add('firewall', 'rule');
+			ctx.set('firewall', id, 'name', 'Allow-Ping'); ctx.set('firewall', id, 'src', 'wan'); ctx.set('firewall', id, 'proto', 'icmp');
+			ctx.set('firewall', id, 'icmp_type', 'echo-request'); ctx.set('firewall', id, 'family', 'ipv4'); ctx.set('firewall', id, 'target', 'ACCEPT');
+		}
+		ctx.set('firewall', id, 'enabled', a.ping ? '1' : '0');
+	}
+	if (a.dmz_ip != null) {
+		const ip = trim('' + a.dmz_ip);
+		let id = null;
+		ctx.foreach('firewall', 'redirect', (s) => { if (s.name == 'NetOS-DMZ') id = s['.name']; });
+		if (!length(ip)) { if (id) ctx.delete('firewall', id); }
+		else {
+			if (!lanContains(ip) || ip == lanCidr().ip) fail('DMZ cihazı yerel ağda olmalı');
+			if (!id) id = ctx.add('firewall', 'redirect');
+			ctx.set('firewall', id, 'name', 'NetOS-DMZ'); ctx.set('firewall', id, 'target', 'DNAT'); ctx.set('firewall', id, 'src', 'wan');
+			ctx.set('firewall', id, 'dest', 'lan'); ctx.set('firewall', id, 'proto', 'all'); ctx.set('firewall', id, 'dest_ip', ip); ctx.set('firewall', id, 'enabled', '1');
+		}
+	}
+	ctx.commit('firewall');
+	run('/etc/init.d/firewall reload');
+	out({ ok: true });
+}
+
 // ══ Port yönlendirme ══
 function pfList() {
 	const rules = [];
@@ -108,7 +144,7 @@ function upnpInfo() {
 	}
 	return { installed: installed, enabled: installed && ctx.get('upnpd', 'config', 'enabled') == '1', running: length(trim(sh('pgrep miniupnpd 2>/dev/null'))) > 0, leases: leases };
 }
-function pf_list() { out({ rules: pfList(), upnp: upnpInfo(), wans: wanInfo(), lan: lanCidr() }); }
+function pf_list() { out({ rules: filter(pfList(), (r) => r.name != 'NetOS-DMZ'), upnp: upnpInfo(), wans: wanInfo(), lan: lanCidr(), fw: fwInfo() }); }
 
 function pf_set() {
 	const a = input();
@@ -126,7 +162,7 @@ function pf_set() {
 	if (!length(name)) name = 'NetOS ' + ip + ':' + intp;
 	// çakışma: aynı protokolde kesişen dış port
 	for (let r in pfList()) {
-		if (r.id == a.id || !r.enabled) continue;
+		if (r.id == a.id || !r.enabled || r.name == 'NetOS-DMZ') continue;
 		const rr = portRange(r.ext_port);
 		const protoClash = r.proto == proto || index(r.proto, ' ') > 0 || index(proto, ' ') > 0;
 		if (rr && protoClash && rr[0] <= er[1] && er[0] <= rr[1]) fail('Dış port ' + r.ext_port + ' zaten "' + (r.name || r.ip) + '" kuralında kullanılıyor');
@@ -435,6 +471,7 @@ case 'wan_info': out({ wans: wanInfo() }); break;
 case 'pf_list': pf_list(); break;
 case 'pf_set': pf_set(); break;
 case 'pf_delete': pf_delete(); break;
+case 'fw_set': fw_set(); break;
 case 'upnp_set': upnp_set(); break;
 case 'lan_get': lan_get(); break;
 case 'lan_set': lan_set(); break;
