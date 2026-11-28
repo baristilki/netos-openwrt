@@ -3069,3 +3069,67 @@ input.field {
   .speed-steps { justify-content: center; }
   .speed-controls button { flex: 1 1 100%; }
 }
+
+/* ── Hız testi: hat/sunucu seçici kartlar ── */
+.sp-hidden select { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.sp-hidden { justify-content: flex-end; }
+.sp-pick { display: grid; gap: 12px; margin-bottom: 14px; }
+.sp-row { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 12px; align-items: start; }
+.sp-lbl { padding-top: 12px; font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.sp-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.sp-chip { display: inline-flex; align-items: center; gap: 10px; padding: 8px 14px 8px 10px; min-height: 48px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, background .15s, box-shadow .15s; }
+.sp-chip:hover:not([disabled]) { border-color: var(--accent); }
+.sp-chip.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.sp-chip[disabled] { opacity: .55; cursor: default; }
+.sp-chip > span:last-child { display: grid; line-height: 1.2; }
+.sp-chip strong { font-size: 13px; }
+.sp-chip small { font-size: 11px; color: var(--muted); }
+.sp-chip .isp-badge { margin: 0; }
+.sp-ic { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 7px; background: var(--surface-2); font-size: 14px; }
+.sp-hidden .btn.primary { min-width: 200px; height: 46px; font-size: 15px; }
+@media (max-width: 760px) { .sp-row { grid-template-columns: minmax(0, 1fr); gap: 6px; } .sp-lbl { padding: 0; } .sp-chip { flex: 1 1 calc(50% - 8px); } .sp-hidden .btn.primary { width: 100%; } }
+/* sonuç kutuları: üçü aynı hizada */
+.result-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.rm { display: grid; grid-template-rows: auto auto auto; align-content: start; gap: 4px; padding: 16px 18px; border-radius: 14px; background: var(--surface-2); text-align: left; }
+.rm-k { font-size: 12px; font-weight: 650; color: var(--muted); }
+.rm b { font-size: 32px; line-height: 1.05; letter-spacing: -.02em; }
+.rm small { font-size: 12px; color: var(--muted); }
+.rm.down b { color: var(--accent); }
+.rm.up b { color: #7189c2; }
+@media (max-width: 560px) { .result-metrics { grid-template-columns: minmax(0, 1fr); } }
+/* ── Son testler ── */
+.sh-list { display: grid; }
+.sh-head, .sh-row { display: grid; grid-template-columns: minmax(130px, 1.3fr) minmax(110px, 1fr) minmax(110px, 1fr) 80px 56px 110px; gap: 14px; align-items: center; padding: 10px 6px; }
+.sh-head { font-size: 11px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); border-bottom: 1px solid var(--line); }
+.sh-row + .sh-row { border-top: 1px solid var(--line); }
+.sh-row:hover { background: var(--surface-2); border-radius: 10px; }
+.sh-wan { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.sh-wan strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.sh-wan small { font-size: 10.5px; color: var(--muted); padding: 2px 6px; border-radius: 999px; background: var(--surface-2); }
+.sh-wan .isp-badge { margin: 0; }
+.sh-val { display: grid; grid-template-columns: auto 1fr; align-items: baseline; column-gap: 4px; }
+.sh-val b { font-size: 15px; }
+.sh-val small { font-size: 10.5px; color: var(--muted); }
+.sh-val i { grid-column: 1 / -1; height: 5px; margin-top: 4px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+.sh-val em { display: block; height: 100%; border-radius: 99px; }
+.sh-val em.dl { background: var(--accent); }
+.sh-val em.ul { background: #7189c2; }
+.sh-ping { font-weight: 700; }
+.sh-ping small { color: var(--muted); font-weight: 500; }
+.sh-grade { display: inline-grid; place-items: center; min-width: 30px; height: 26px; padding: 0 6px; border-radius: 8px; font-weight: 800; font-size: 13px; }
+.sh-grade.ok { color: var(--green); background: var(--green-bg); }
+.sh-grade.mid { color: var(--amber); background: var(--amber-bg); }
+.sh-grade.bad { color: var(--red); background: var(--red-bg); }
+.sh-row time { font-size: 12px; color: var(--muted); text-align: right; }
+@media (max-width: 760px) {
+  .sh-head { display: none; }
+  .sh-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px 14px; }
+  .sh-wan { grid-column: 1 / -1; }
+  .sh-row time { text-align: left; }
+}
+/* portlar: düzenleme formu */
+.pt-edit { grid-template-columns: minmax(0, 1fr); }
+.pt-edit .field { height: 34px; }
+.pt-edit-foot { display: flex; gap: 6px; justify-content: flex-end; }
+.pt-role .pt-pen { margin-left: auto; opacity: .55; }
+.pt:hover .pt-role .pt-pen { opacity: 1; }

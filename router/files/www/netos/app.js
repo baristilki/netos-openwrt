@@ -91,7 +91,7 @@
       sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
       moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
     })[name] || '';
-  const APP_VERSION = '1.4.1';
+  const APP_VERSION = '1.4.2';
   // [yol, ikon, ad, mobil alt menüde mi (değilse "Menü" sayfasında)]
   const navGroups = [
     ['Ağ', [['/', 'home', 'Ana sayfa', 1], ['/internet', 'globe', 'İnternet', 1], ['/devices', 'devices', 'Cihazlar', 1], ['/wifi', 'wifi', 'Wi-Fi', 1], ['/lan', 'router', 'Yerel ağ'], ['/ports', 'shield', 'Port yönlendirme']]],
@@ -460,7 +460,7 @@
     let P = state.xPorts;
     if (!P?.ports?.length) return '';
     wanUi('');
-    let manual = state.xWanUi?._ports || {}, edit = state.portEdit;
+    let manual = state.xWanUi?._ports || {}, plabels = state.xWanUi?._plabels || {}, edit = state.portEdit;
     let warns = [];
     let tiles = P.ports
       .map((p) => {
@@ -483,20 +483,20 @@
         let note = !p.link ? 'Kablo takılı değil' : real ? (p.duplex === 'half' ? 'Yarı çift yönlü' : 'Tam çift yönlü') : man ? 'Elle girildi' : p.virtual ? 'Sanal port · hız görünmüyor' : 'Hız bilinmiyor';
         let editor =
           edit === p.name
-            ? `<form class="pt-edit" data-port-speed="${esc(p.name)}"><select class="field" name="speed">${[[0, 'Otomatik / bilinmiyor'], [100, '100 Mbit'], [1000, '1 Gbit'], [2500, '2.5 Gbit'], [5000, '5 Gbit'], [10000, '10 Gbit']].map(([v, l]) => `<option value="${v}"${(manual[p.name] || 0) === v ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="btn small primary" type="submit">Kaydet</button></form>`
+            ? `<form class="pt-edit" data-port-speed="${esc(p.name)}"><input class="field" name="label" maxlength="24" placeholder="Port adı (ör. Salon PC)" value="${esc(plabels[p.name] || '')}"><select class="field" name="speed">${[[0, 'Otomatik / bilinmiyor'], [100, '100 Mbit'], [1000, '1 Gbit'], [2500, '2.5 Gbit'], [5000, '5 Gbit'], [10000, '10 Gbit']].map(([v, l]) => `<option value="${v}"${(manual[p.name] || 0) === v ? ' selected' : ''}>${l}</option>`).join('')}</select><div class="pt-edit-foot"><button class="btn small" type="button" data-port-edit="${esc(p.name)}">Vazgeç</button><button class="btn small primary" type="submit">Kaydet</button></div></form>`
             : '';
         let tip = [p.name, p.mac, p.driver, p.flaps ? `açılıştan beri ${p.flaps} kez koptu` : ''].filter(Boolean).join(' · ');
         return `<div class="pt ${cls} ${state_}" title="${esc(tip)}">
           <div class="pt-top"><span class="pt-jack"><i></i><i></i><i></i><i></i><b></b></span><span class="pt-led"></span>${speedEl}</div>
-          <div class="pt-role">${wanNet ? ispBadge(wanNet) : ''}<strong>${esc(wanNet ? wanTitle(wanNet) : title)}</strong></div>
+          <div class="pt-role">${wanNet ? ispBadge(wanNet) : ''}<strong>${esc(plabels[p.name] || (wanNet ? wanTitle(wanNet) : title))}</strong><button class="pt-pen" type="button" data-port-edit="${esc(p.name)}" title="Port adını ve hızını düzenle" aria-label="Port adını ve hızını düzenle">✎</button></div>
           <div class="pt-sub">${esc(wanNet ? 'İnternet · ' + p.name : sub + ' · ' + p.name)}${p.flaps ? ` · <span class="pt-flaps">${p.flaps} kopma</span>` : ''}</div>
-          <div class="pt-note">${esc(note)}${!real && p.link && p.virtual ? ` <button class="pt-pen" type="button" data-port-edit="${esc(p.name)}" title="Kablo hızını elle gir" aria-label="Kablo hızını elle gir">✎</button>` : ''}</div>
+          <div class="pt-note">${esc(note)}</div>
           ${p.link && r ? `<div class="pt-rate num"><span>↓ ${esc(NP.fmt.bits(r.down))}</span><span>↑ ${esc(NP.fmt.bits(r.up))}</span></div>` : '<div class="pt-rate"></div>'}
           ${editor}</div>`;
       })
       .join('');
     let virt = P.ports.some((p) => p.virtual && p.link && !p.speed);
-    return `<section class="card span-12 ports-card">${cardHead('ethernet', 'Portlar')}<div class="pt-grid">${tiles}</div>${warns.map((w) => `<div class="alert">⚠ ${w}</div>`).join('')}${virt ? '<p class="field-hint">Router sanal makinede çalıştığı için kablonun gerçek hızı burada görünmez. ✎ ile her portun fiziksel hızını (Proxmox’taki ağ kartının hızı) elle girebilirsiniz.</p>' : ''}</section>`;
+    return `<section class="card span-12 ports-card">${cardHead('ethernet', 'Portlar')}<div class="pt-grid">${tiles}</div>${warns.map((w) => `<div class="alert">⚠ ${w}</div>`).join('')}${virt ? '<p class="field-hint">Router sanal makinede çalıştığı için kablonun gerçek hızını kendisi göremez. ✎ ile her porta ad verebilir ve fiziksel hızını (Proxmox’taki ağ kartının hızı) girebilirsiniz.</p>' : ''}</section>`;
   }
   document.addEventListener('click', (e) => {
     let b = e.target.closest('[data-port-edit]');
@@ -509,10 +509,10 @@
     if (!f) return;
     e.preventDefault();
     try {
-      await NP.setPortSpeed(f.dataset.portSpeed, f.speed.value);
+      await NP.setPortSpeed(f.dataset.portSpeed, f.speed.value, f.label.value);
       state.xWanUi = await NP.getWanUi();
       state.portEdit = null;
-      toast('Port hızı kaydedildi');
+      toast('Port kaydedildi');
     } catch (x) {
       toast(x.message);
     }
@@ -540,8 +540,13 @@
     let off = state.status.offload && !state.alertOff && !lsGet('np_offload_ok') && onceBanner('np_offload_banner');
     let online = state.clients.filter((c) => c.online && !c.blocked),
       total = state.clients.length;
-    let top = [...online].sort((a, b) => b.down + b.up - (a.down + a.up)).slice(0, 5);
-    return `${pageHead('Genel bakış', esc(state.overview?.hostname || 'Ağınız'), esc(state.overview?.model || 'Router durumu ve bağlı cihazlar'))}${off ? offloadAlert() : ''}<div class="grid">${internetCard()}<section class="card span-5">${cardHead('wifi', 'Wi-Fi', `<a href="#/wifi">Tüm ağlar →</a>`)}<div class="wifi-list">${wifiRows()}</div></section>${todayCard()}<section class="card span-6">${cardHead('devices', 'Cihazlar', `<a href="#/devices">Tüm cihazlar →</a>`)}<div class="device-topline"><strong>${online.length}</strong><span>çevrimiçi / ${total} kayıtlı</span></div><div class="traffic-devices">${top.map((c) => `<div class="traffic-device"><span class="traffic-device-name"><span class="type-icon tiny">${typeIcon(c.type)}</span>${esc(c.displayName)}</span><span class="traffic-device-speed">↓ ${esc(NP.fmt.bits(c.down))} · ↑ ${esc(NP.fmt.bits(c.up))}</span><div class="mini-track"><i style="width:${Math.max(3, Math.min(100, ((c.down + c.up) / (top[0]?.down + top[0]?.up || 1)) * 100))}%"></i></div></div>`).join('') || '<div class="empty">Çevrimiçi cihaz yok.</div>'}</div></section>${portsCard()}<section class="card span-12">${cardHead('system', 'Sistem', `<a href="#/system">Sistem bilgileri →</a>`)}<div class="system-stats"><div><span class="metric-label">Çalışma süresi</span><strong>${fmtUptime(state.overview?.uptime)}</strong></div><div><span class="metric-label">CPU yükü · 1 dk</span><strong>${esc(state.overview?.load?.[0] ?? '—')}</strong></div><div><span class="metric-label">Bellek · ${state.overview?.memory?.percent || 0}%</span><strong>${esc(NP.fmt.bytes(state.overview?.memory?.used || 0))} / ${esc(NP.fmt.bytes(state.overview?.memory?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.overview?.memory?.percent || 0)}%"></i></div></div><div><span class="metric-label">CPU</span><strong>${state.system?.cpuEstimated ? '~' : ''}%${esc(state.system?.cpu ?? '—')}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.cpu || 0)}%"></i></div></div><div><span class="metric-label">Disk · ${esc(state.system?.disk?.percent ?? 0)}%</span><strong>${esc(NP.fmt.bytes(state.system?.disk?.used || 0))} / ${esc(NP.fmt.bytes(state.system?.disk?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.disk?.percent || 0)}%"></i></div></div><div><span class="metric-label">Firmware</span><strong>${esc(state.overview?.firmware || '—')}</strong></div></div></section></div>`;
+    // sıra her yenilemede değişmesin: en çok kullananlar dakikada bir seçilir, hızlar canlı güncellenir
+    let ht = state.homeTop;
+    if (!ht || Date.now() - ht.t > 60000 || ht.macs.some((m) => !online.find((c) => c.mac === m)))
+      ht = state.homeTop = { t: Date.now(), macs: [...online].sort((a, b) => b.down + b.up - (a.down + a.up)).slice(0, 5).map((c) => c.mac) };
+    let top = ht.macs.map((m) => online.find((c) => c.mac === m)).filter(Boolean);
+    let topMax = Math.max(1, ...top.map((c) => c.down + c.up));
+    return `${pageHead('Genel bakış', esc(state.overview?.hostname || 'Ağınız'), esc(state.overview?.model || 'Router durumu ve bağlı cihazlar'))}${off ? offloadAlert() : ''}<div class="grid">${internetCard()}<section class="card span-5">${cardHead('wifi', 'Wi-Fi', `<a href="#/wifi">Tüm ağlar →</a>`)}<div class="wifi-list">${wifiRows()}</div></section>${todayCard()}<section class="card span-6">${cardHead('devices', 'Cihazlar', `<a href="#/devices">Tüm cihazlar →</a>`)}<div class="device-topline"><strong>${online.length}</strong><span>çevrimiçi / ${total} kayıtlı</span></div><div class="traffic-devices">${top.map((c) => `<div class="traffic-device"><span class="traffic-device-name"><span class="type-icon tiny">${typeIcon(c.type)}</span>${esc(c.displayName)}</span><span class="traffic-device-speed">↓ ${esc(NP.fmt.bits(c.down))} · ↑ ${esc(NP.fmt.bits(c.up))}</span><div class="mini-track"><i style="width:${Math.max(3, Math.min(100, ((c.down + c.up) / topMax) * 100))}%"></i></div></div>`).join('') || '<div class="empty">Çevrimiçi cihaz yok.</div>'}</div></section>${portsCard()}<section class="card span-12">${cardHead('system', 'Sistem', `<a href="#/system">Sistem bilgileri →</a>`)}<div class="system-stats"><div><span class="metric-label">Çalışma süresi</span><strong>${fmtUptime(state.overview?.uptime)}</strong></div><div><span class="metric-label">CPU yükü · 1 dk</span><strong>${esc(state.overview?.load?.[0] ?? '—')}</strong></div><div><span class="metric-label">Bellek · ${state.overview?.memory?.percent || 0}%</span><strong>${esc(NP.fmt.bytes(state.overview?.memory?.used || 0))} / ${esc(NP.fmt.bytes(state.overview?.memory?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.overview?.memory?.percent || 0)}%"></i></div></div><div><span class="metric-label">CPU</span><strong>${state.system?.cpuEstimated ? '~' : ''}%${esc(state.system?.cpu ?? '—')}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.cpu || 0)}%"></i></div></div><div><span class="metric-label">Disk · ${esc(state.system?.disk?.percent ?? 0)}%</span><strong>${esc(NP.fmt.bytes(state.system?.disk?.used || 0))} / ${esc(NP.fmt.bytes(state.system?.disk?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.disk?.percent || 0)}%"></i></div></div><div><span class="metric-label">Firmware</span><strong>${esc(state.overview?.firmware || '—')}</strong></div></div></section></div>`;
   }
   const findIface = (c) =>
     state.networks.interfaces.find((n) => n.name === c.iface) ||
@@ -2454,7 +2459,7 @@
       )
         ? `<div class="alert speed-recommend"><span>Ping&#39;i düşürmek için SQM&#39;i ↓ ${esc(cur.recommendDownMbit)} / ↑ ${esc(cur.recommendUpMbit)} Mbit/s yapın</span><button class="btn small" data-apply-recommend>Önerilen değerleri uygula</button></div>`
         : '';
-    return `${pageHead('Ağ performansı', 'Hız &amp; Ping', 'Hızınızı ve yük altındaki gecikmeyi ölçün.')}<section class="card speed-hero">${cardHead('speed', 'Hız testi')}<div class="speed-controls"><select class="field" id="speed-wan">${wans.map((w, i) => `<option value="${esc(w.name)}" ${i === 0 ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select><button class="btn primary" data-start-speed ${cur?.running ? 'disabled' : ''}>${cur?.running ? 'Test sürüyor…' : 'Testi başlat'}</button></div><div class="speed-live"><div><div class="eyebrow">${phase}</div><strong>${cur?.phase === 'upload' ? esc(cur.up || 0) : esc(cur?.down || 0)}<small> Mbit/s</small></strong><div class="speed-arrows">↓ ${esc(cur?.down || 0)} <span>·</span> ↑ ${esc(cur?.up || 0)}</div></div><div class="speed-meter"><svg viewBox="0 0 180 100" aria-hidden="true"><path pathLength="100" d="M15 90 A75 75 0 0 1 165 90"/><path class="meter-value" pathLength="100" d="M15 90 A75 75 0 0 1 165 90" style="stroke-dasharray:${Math.max(0, Math.min(100, Number(cur?.progress) || 0))} 100"/></svg><b>${Math.round(cur?.progress || 0)}%</b></div></div><div class="progress speed-progress"><i style="width:${Math.max(0, Math.min(100, cur?.progress || 0))}%"></i></div>${cur?.error ? `<div class="form-error">${esc(cur.error)}</div>` : ''}${cur && !cur.running && cur.phase === 'done' ? `<div class="speed-result"><div class="result-metrics"><div>↓ <b>${esc(cur.down)}</b><small>Mbit/s indirme</small></div><div>↑ <b>${esc(cur.up)}</b><small>Mbit/s yükleme</small></div><div><b>${esc(cur.idleMs)} ms</b><small>Ping (boşta) · jitter ${esc(cur.jitterMs ?? '—')} ms</small></div></div><div class="grade-panel"><span class="grade ${cls}">${esc(grade)}</span><strong>${esc(cur.gradeText || '')}</strong></div><div class="latency-bars">${bars.map(([label, val]) => `<div><span>${label}<b>${esc(val ?? '—')} ms</b></span><i><em style="width:${Math.min(100, ((Number(val) || 0) / max) * 100)}%"></em></i></div>`).join('')}</div><div class="field-hint">Yük altındaki artış: +${esc(cur.increaseMs ?? '—')} ms</div>${recommendation}<button class="btn" data-start-speed>Tekrar test et</button></div>` : ''}</section><section class="card">${cardHead('system', 'Son testler')}<div class="event-list">${(state.speedHistory || []).map((h) => `<div class="event-row"><i class="grade-dot ${esc(h.grade || '')}"></i><div><strong>${esc(h.wan || 'WAN')} · ↓ ${esc(h.down)} / ↑ ${esc(h.up)} Mbit/s</strong><span>Ping ${esc(h.idleMs ?? '—')} ms <span class="badge ${/^(A\+|A)$/.test(h.grade) ? 'ok' : 'warn'}">${esc(h.grade || '—')}</span></span></div><time>${h.t ? esc(new Date(h.t).toLocaleString('tr-TR')) : ''}</time></div>`).join('') || '<div class="empty">Henüz hız testi yok.</div>'}</div></section><section class="card">${cardHead('router', 'Ping düşürme — SQM')}<p class="field-hint">SQM, hat dolduğunda ping&#39;in yükselmesini (bufferbloat) önler. Sınırları ölçülen hızın ~%90&#39;ına ayarlayın.</p>${sqmCard()}</section><section class="card">${cardHead('devices', 'Oyun önceliği')}${gamingWarnings()}${priorityRows()}<p class="field-hint">Öncelik cihazın gönderdiği (yükleme) trafiğine uygulanır; indirmede SQM her cihaza adil pay verir.</p></section>`;
+    return `${pageHead('Ağ performansı', 'Hız &amp; Ping', 'Hızınızı ve yük altındaki gecikmeyi ölçün.')}<section class="card speed-hero">${cardHead('speed', 'Hız testi')}<div class="speed-controls"><select class="field" id="speed-wan">${wans.map((w, i) => `<option value="${esc(w.name)}" ${i === 0 ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select><button class="btn primary" data-start-speed ${cur?.running ? 'disabled' : ''}>${cur?.running ? 'Test sürüyor…' : 'Testi başlat'}</button></div><div class="speed-live"><div><div class="eyebrow">${phase}</div><strong>${cur?.phase === 'upload' ? esc(cur.up || 0) : esc(cur?.down || 0)}<small> Mbit/s</small></strong><div class="speed-arrows">↓ ${esc(cur?.down || 0)} <span>·</span> ↑ ${esc(cur?.up || 0)}</div></div><div class="speed-meter"><svg viewBox="0 0 180 100" aria-hidden="true"><path pathLength="100" d="M15 90 A75 75 0 0 1 165 90"/><path class="meter-value" pathLength="100" d="M15 90 A75 75 0 0 1 165 90" style="stroke-dasharray:${Math.max(0, Math.min(100, Number(cur?.progress) || 0))} 100"/></svg><b>${Math.round(cur?.progress || 0)}%</b></div></div><div class="progress speed-progress"><i style="width:${Math.max(0, Math.min(100, cur?.progress || 0))}%"></i></div>${cur?.error ? `<div class="form-error">${esc(cur.error)}</div>` : ''}${cur && !cur.running && cur.phase === 'done' ? `<div class="speed-result"><div class="result-metrics"><div class="rm down"><span class="rm-k">↓ İndirme</span><b>${esc(cur.down)}</b><small>Mbit/s</small></div><div class="rm up"><span class="rm-k">↑ Yükleme</span><b>${esc(cur.up)}</b><small>Mbit/s</small></div><div class="rm ping"><span class="rm-k">◷ Ping (boşta)</span><b>${esc(cur.idleMs)}</b><small>ms · jitter ${esc(cur.jitterMs ?? '—')} ms</small></div></div><div class="grade-panel"><span class="grade ${cls}">${esc(grade)}</span><strong>${esc(cur.gradeText || '')}</strong></div><div class="latency-bars">${bars.map(([label, val]) => `<div><span>${label}<b>${esc(val ?? '—')} ms</b></span><i><em style="width:${Math.min(100, ((Number(val) || 0) / max) * 100)}%"></em></i></div>`).join('')}</div><div class="field-hint">Yük altındaki artış: +${esc(cur.increaseMs ?? '—')} ms</div>${recommendation}<button class="btn" data-start-speed>Tekrar test et</button></div>` : ''}</section><section class="card">${cardHead('system', 'Son testler')}${speedHistoryHtml()}</section><section class="card">${cardHead('router', 'Ping düşürme — SQM')}<p class="field-hint">SQM, hat dolduğunda ping&#39;in yükselmesini (bufferbloat) önler. Sınırları ölçülen hızın ~%90&#39;ına ayarlayın.</p>${sqmCard()}</section><section class="card">${cardHead('devices', 'Oyun önceliği')}${gamingWarnings()}${priorityRows()}<p class="field-hint">Öncelik cihazın gönderdiği (yükleme) trafiğine uygulanır; indirmede SQM her cihaza adil pay verir.</p></section>`;
   }
   function speedPage() {
     let html = legacySpeedPage(),
@@ -2542,7 +2547,49 @@
         `<p class="field-hint speed-mode-hint" id="speed-mode-hint">${speedModeHint(sel)}</p>`,
       );
     }
+    // seçicileri kart düğmelerine çevir
+    let wanSel = document.createElement('div');
+    wanSel.innerHTML = (html.match(/<select class="field" id="speed-wan">[\s\S]*?<\/select>/) || [''])[0];
+    let srvSelEl = document.createElement('div');
+    srvSelEl.innerHTML = (html.match(/<select class="field" id="speed-server"[\s\S]*?<\/select>/) || [''])[0];
+    let wOpts = [...wanSel.querySelectorAll('option')], sOpts = [...srvSelEl.querySelectorAll('option')];
+    let wCur = wOpts.find((o) => o.selected)?.value || wOpts[0]?.value, sCur = sOpts.find((o) => o.selected)?.value || sOpts[0]?.value;
+    let chip = (kind, o, on, inner) => `<button type="button" class="sp-chip${on ? ' on' : ''}" data-sp-pick="${kind}" data-v="${esc(o.value)}"${cur?.running ? ' disabled' : ''}>${inner}</button>`;
+    let wanChips = wOpts.map((o) => {
+      let multi = o.value === 'all' || o.value === 'all-combined';
+      return chip('wan', o, o.value === wCur, multi
+        ? `<span class="sp-ic">${o.value === 'all' ? '⇄' : '⧉'}</span><span><strong>${o.value === 'all' ? 'Tüm hatlar' : 'Toplam kapasite'}</strong><small>${o.value === 'all' ? 'Sırayla, karşılaştır' : 'Hepsi birlikte'}</small></span>`
+        : `${ispBadge(o.value) || '<span class="sp-ic">🌐</span>'}<span><strong>${esc(wanTitle(o.value))}</strong><small>${esc(o.value)}</small></span>`);
+    }).join('');
+    let srvChips = sOpts.map((o) => {
+      let [a, b] = o.textContent.split(' — ');
+      return chip('srv', o, o.value === sCur, `<span><strong>${esc(a)}</strong><small>${esc(b || '')}</small></span>`);
+    }).join('');
+    html = html.replace('<div class="speed-controls">', `<div class="sp-pick"><div class="sp-row"><span class="sp-lbl">Hat</span><div class="sp-chips">${wanChips}</div></div>${srvChips ? `<div class="sp-row"><span class="sp-lbl">Sunucu</span><div class="sp-chips">${srvChips}</div></div>` : ''}</div><div class="speed-controls sp-hidden">`);
     return html;
+  }
+  document.addEventListener('click', (e) => {
+    let b = e.target.closest('[data-sp-pick]');
+    if (!b) return;
+    let sel = document.getElementById(b.dataset.spPick === 'wan' ? 'speed-wan' : 'speed-server');
+    if (!sel) return;
+    sel.value = b.dataset.v;
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+    b.parentElement.querySelectorAll('.sp-chip').forEach((x) => x.classList.toggle('on', x === b));
+  });
+  function speedHistoryHtml() {
+    let h = state.speedHistory || [];
+    if (!h.length) return '<div class="empty">Henüz hız testi yok. Yukarıdan bir test başlatın.</div>';
+    let max = Math.max(1, ...h.map((x) => Math.max(+x.down || 0, +x.up || 0)));
+    let d = (t) => new Date(t).toLocaleString('tr-TR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+    return `<div class="sh-list"><div class="sh-head"><span>Hat</span><span>İndirme</span><span>Yükleme</span><span>Ping</span><span>Not</span><span>Tarih</span></div>${h
+      .map((x) => {
+        let w = x.wan === '*' || !x.wan ? (x.mode === 'combined' ? 'Toplam kapasite' : 'Tüm hatlar') : wanTitle(x.wan);
+        let bar = (v, c) => `<span class="sh-val"><b class="num">${esc(v ?? '—')}</b><small>Mbit/s</small><i><em class="${c}" style="width:${Math.max(2, ((+v || 0) / max) * 100)}%"></em></i></span>`;
+        let g = x.grade || '—', gc = /^A/.test(g) ? 'ok' : /^B/.test(g) ? 'mid' : 'bad';
+        return `<div class="sh-row"><span class="sh-wan">${x.wan && x.wan !== '*' ? ispBadge(x.wan) : ''}<strong>${esc(w)}</strong>${x.mode && x.mode !== 'single' ? `<small>${x.mode === 'sequential' ? 'sırayla' : 'birlikte'}</small>` : ''}</span>${bar(x.down, 'dl')}${bar(x.up, 'ul')}<span class="sh-ping num">${esc(x.idleMs ?? '—')}<small> ms</small></span><span><span class="sh-grade ${gc}">${esc(g)}</span></span><time>${x.t ? esc(d(x.t)) : ''}</time></div>`;
+      })
+      .join('')}</div>`;
   }
   function speedModeHint(v) {
     return v === 'all'

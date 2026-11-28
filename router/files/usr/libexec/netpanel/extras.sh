@@ -304,16 +304,25 @@ wanui_get() {
 	printf '},"ports":{'
 	uci -q show netpanel.portui | sed -n "s/^netpanel\.portui\.\([A-Za-z0-9_]*\)_speed='\{0,1\}\([0-9]*\)'\{0,1\}$/\1 \2/p" |
 		awk 'BEGIN { f = 1 } { printf "%s\"%s\":%d", (f ? "" : ","), $1, $2; f = 0 }'
+	printf '},"port_labels":{'
+	uci -q show netpanel.portui | sed -n "s/^netpanel\.portui\.\([A-Za-z0-9_]*\)_label='\(.*\)'$/\1\t\2/p" |
+		awk -F'\t' 'BEGIN { f = 1 } { gsub(/["\\]/, "", $2); printf "%s\"%s\":\"%s\"", (f ? "" : ","), $1, $2; f = 0 }'
 	printf '}}\n'
 }
 portui_set() {
 	local input d sp
 	input=$(cat); json_load "$input" 2>/dev/null || err "Geçersiz istek"
+	local t l=""
 	json_get_var d dev; json_get_var sp speed
+	json_get_type t label && json_get_var l label
 	case "$d" in '' | *[!A-Za-z0-9_]*) err "Geçersiz port" ;; esac
 	case "$sp" in 0 | 10 | 100 | 1000 | 2500 | 5000 | 10000) ;; *) err "Geçersiz hız" ;; esac
 	[ "$(uci -q get netpanel.portui)" = portui ] || uci set netpanel.portui=portui
 	if [ "$sp" = 0 ]; then uci -q delete "netpanel.portui.${d}_speed"; else uci set "netpanel.portui.${d}_speed=$sp"; fi
+	if [ -n "$t" ]; then
+		l=$(printf '%s' "$l" | tr -d '"\\\n\r' | cut -c1-24)
+		if [ -n "$l" ]; then uci set "netpanel.portui.${d}_label=$l"; else uci -q delete "netpanel.portui.${d}_label"; fi
+	fi
 	uci commit netpanel
 	echo '{"ok":true}'
 }

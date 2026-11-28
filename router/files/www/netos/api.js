@@ -481,8 +481,8 @@
   // yerel cihaza ping -> { received (0-3), avgMs | null }
   // Fabrika ayarları: confirm === 'SIFIRLA' olmalı. Router tüm ayarları (NetOS dahil) silip yeniden başlar.
   // Hat görünen adı + operatör (yalnız arayüz) -> { Turknet: { label, isp }, ... }
-  async function getWanUi() { const r = await npCall('wanui_get', {}); return { ...(r.wans || {}), _ports: r.ports || {} }; }
-  async function setPortSpeed(dev, speed) { await npCall('portui_set', { dev, speed: +speed || 0 }); }
+  async function getWanUi() { const r = await npCall('wanui_get', {}); return { ...(r.wans || {}), _ports: r.ports || {}, _plabels: r.port_labels || {} }; }
+  async function setPortSpeed(dev, speed, label) { await npCall('portui_set', { dev, speed: +speed || 0, ...(label != null ? { label: String(label).trim() } : {}) }); }
   async function setWanUi(name, label, isp) { await npCall('wanui_set', { name, label: String(label || '').trim(), isp: isp || '' }); }
   async function factoryReset(confirm) { return npCall('factory_reset', { confirm: String(confirm || '') }); }
   // bu kurulumda fabrika ayarı mümkün mü -> { supported, reason }
@@ -1667,6 +1667,7 @@
     const demoCf = { installed: true, enabled: true, token_set: true, token_valid: true, tunnel_id: 'a1b2c3d4-1111-2222-3333-444455556666',
       running: true, connections: 4, hosts: [{ hostname: 'ha.ornek.com', service: 'http://192.168.1.199:8123' }], curl: true };
     const demoPortUi = {};
+    const demoPortLabels = {};
     const demoWanUi = { Turknet: { label: 'Turknet Fiber', isp: 'turknet' }, wan2: { label: '', isp: '' } };
     const demoSsl = { ca: false, ca_expires: 0, cert_by_netos: false, cert_expires: nowSec() + 300 * 86400, names: 'DNS:OpenWrt', ca_url: '/netos-ca.crt' };
     const demoGuest = { enabled: true, ssid: 'Huawei-Misafir', secure: true, password: 'misafir2026', valid: 2, until: nowSec() + 15 * 3600 + 1200, limit: true, limit_mbps: 20 };
@@ -1884,8 +1885,8 @@
         return { ok: true };
       },
       'netpanel.usage_get': (a) => ({ days: demoUsage.slice(0, a.days || 31) }),
-      'netpanel.wanui_get': () => ({ wans: JSON.parse(JSON.stringify(demoWanUi)), ports: { ...demoPortUi } }),
-      'netpanel.portui_set': (a) => { if (+a.speed) demoPortUi[a.dev] = +a.speed; else delete demoPortUi[a.dev]; return { ok: true }; },
+      'netpanel.wanui_get': () => ({ wans: JSON.parse(JSON.stringify(demoWanUi)), ports: { ...demoPortUi }, port_labels: { ...demoPortLabels } }),
+      'netpanel.portui_set': (a) => { if (+a.speed) demoPortUi[a.dev] = +a.speed; else delete demoPortUi[a.dev]; if (a.label != null) { if (a.label) demoPortLabels[a.dev] = a.label; else delete demoPortLabels[a.dev]; } return { ok: true }; },
       'netpanel.wanui_set': (a) => { demoWanUi[a.name] = { label: a.label || '', isp: a.isp || '' }; return { ok: true }; },
       'netpanel.factory_reset': (a) => a.check ? { ok: true, supported: true } : (a.confirm === 'SIFIRLA' ? { ok: false, error: 'Demo modunda sıfırlama yapılmaz' } : { ok: false, error: 'Onay metni hatalı; SIFIRLA yazın' }),
       'netpanel.ping_host': (a) => (/\.(2|3|10)$/.test(a.ip) ? { ok: true, received: 3, avg_ms: 1 + (a.ip.length % 7) * 1.3 } : { ok: true, received: 0, avg_ms: null }),

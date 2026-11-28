@@ -558,6 +558,17 @@ window.NETOS_EN = {
   "Router sanal makinede çalıştığı için kablonun gerçek hızı burada görünmez. ✎ ile her portun fiziksel hızını (Proxmox’taki ağ kartının hızı) elle girebilirsiniz.": "The router runs in a virtual machine, so the real cable speed isn’t visible here. Use ✎ to enter each port’s physical speed (the NIC speed in Proxmox).",
   "Ev ağınızı yönetmek için router şifrenizle giriş yapın.": "Sign in with your router password to manage your home network.",
   "🔒 Şifreli bağlantı": "🔒 Encrypted connection",
+  "Toplam kapasite": "Total capacity",
+  "Sırayla, karşılaştır": "One by one, compare",
+  "Hepsi birlikte": "All together",
+  "◷ Ping (boşta)": "◷ Ping (idle)",
+  "Not": "Grade",
+  "Tarih": "Date",
+  "Henüz hız testi yok. Yukarıdan bir test başlatın.": "No speed tests yet. Start one above.",
+  "Port adı (ör. Salon PC)": "Port name (e.g. Living room PC)",
+  "Port adını ve hızını düzenle": "Edit port name and speed",
+  "Port kaydedildi": "Port saved",
+  "Router sanal makinede çalıştığı için kablonun gerçek hızını kendisi göremez. ✎ ile her porta ad verebilir ve fiziksel hızını (Proxmox’taki ağ kartının hızı) girebilirsiniz.": "The router runs in a VM and can’t see the real cable speed. Use ✎ to name each port and enter its physical speed (the NIC speed in Proxmox).",
 };
 
 /* Parça çevirileri: tam eşleşme yoksa metnin içinde geçen bu parçalar değiştirilir (değişken içeren metinler için). Uzundan kısaya uygulanır. */
