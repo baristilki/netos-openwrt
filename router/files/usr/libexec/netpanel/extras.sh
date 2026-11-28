@@ -144,13 +144,35 @@ backup_create() {
 	printf '{"ok":true,"name":"netos-yedek-%s.tar.gz","size":%d,"data":"%s"}\n' "$(date +%Y%m%d-%H%M)" "$sz" "$(openssl base64 -A <"$f")"
 	rm -f "$f"
 }
+# Yedeğin içindeki bir uci dosyasından değer oku: dosya bölüm-adı|@tip seçenek (ilk eşleşen)
+bk_uci() {
+	tar -xzOf "$BK" "$1" 2>/dev/null | awk -v s="$2" -v o="$3" -v q="'" '
+		/^config / { t = $2; n = $3; gsub(q, "", n); gsub(/"/, "", n); hit = (s == n || s == "@" t); next }
+		hit && $1 == "option" && $2 == o { v = $3; gsub(q, "", v); gsub(/"/, "", v); print v; exit }'
+}
 backup_restore() {
-	local input data f=/tmp/netos-restore.tar.gz
+	local input data dry f=/tmp/netos-restore.tar.gz host ip cur newest n has
 	input=$(cat); json_load "$input" 2>/dev/null || err "Geçersiz istek"
 	json_get_var data data
+	json_get_var dry dry
 	[ -n "$data" ] || err "Yedek dosyası boş"
 	printf '%s' "$data" | openssl base64 -d -A >"$f" 2>/dev/null || err "Dosya çözülemedi"
 	tar -tzf "$f" 2>/dev/null | grep -q '^etc/config/' || { rm -f "$f"; err "Bu bir OpenWrt yedeği değil (etc/config yok)"; }
+	if [ "$dry" = 1 ]; then
+		# yalnız incele: hangi router'ın yedeği, IP adresi, ne zaman alınmış, neler var
+		BK=$f
+		has() { tar -tzf "$f" | grep -q "$1" && echo true || echo false; }
+		host=$(bk_uci etc/config/system @system hostname | tr -d '"\')
+		ip=$(bk_uci etc/config/network lan ipaddr | cut -d/ -f1)
+		cur=$(uci -q get network.lan.ipaddr | cut -d/ -f1)
+		n=$(tar -tzf "$f" | grep -vc '/$')
+		newest=$(tar -tvzf "$f" 2>/dev/null | awk '{ print $4 " " $5 }' | sort | tail -1)
+		printf '{"ok":true,"dry":true,"hostname":"%s","lan_ip":"%s","current_ip":"%s","files":%d,"date":"%s","netos":%s,"ca":%s,"wifi":%s,"mwan3":%s,"adguard":%s}\n' \
+			"$host" "$ip" "$cur" "$n" "$newest" "$(has '^etc/config/netpanel$')" "$(has '^etc/netpanel/ca/ca.key')" \
+			"$(has '^etc/config/wireless$')" "$(has '^etc/config/mwan3$')" "$(has '^etc/config/adguardhome$')"
+		rm -f "$f"
+		return
+	fi
 	sysupgrade -r "$f" >/dev/null 2>&1 || { rm -f "$f"; err "Yedek geri yüklenemedi"; }
 	rm -f "$f"
 	# yanıt döndükten sonra yeniden başlat

@@ -16,6 +16,8 @@ cp -f "$SRC/usr/share/rpcd/acl.d/netpanel.json" /usr/share/rpcd/acl.d/
 cp -f "$SRC/etc/init.d/netpanel" /etc/init.d/
 cp -f "$SRC/etc/hotplug.d/dhcp/90-netpanel" /etc/hotplug.d/dhcp/
 cp -f "$SRC/etc/hotplug.d/iface/90-netpanel" /etc/hotplug.d/iface/
+# yedeğe ve OpenWrt sürüm yükseltmesine dahil edilecek NetOS verileri (sertifika otoritesi, geçmiş kayıtları)
+mkdir -p /lib/upgrade/keep.d && cp -f "$SRC/lib/upgrade/keep.d/netpanel" /lib/upgrade/keep.d/netpanel && chmod 644 /lib/upgrade/keep.d/netpanel
 mkdir -p /www/cgi-bin && cp -f "$SRC/www/cgi-bin/netos-auth" /www/cgi-bin/netos-auth
 [ -f /etc/config/netpanel ] || cp "$SRC/etc/config/netpanel" /etc/config/
 rm -rf /www/netos.new && cp -rf "$SRC/www/netos" /www/netos.new && rm -rf /www/netos && mv /www/netos.new /www/netos

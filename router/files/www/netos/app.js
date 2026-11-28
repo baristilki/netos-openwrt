@@ -91,7 +91,7 @@
       sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
       moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
     })[name] || '';
-  const APP_VERSION = '1.3.2';
+  const APP_VERSION = '1.3.3';
   // [yol, ikon, ad, mobil alt menüde mi (değilse "Menü" sayfasında)]
   const navGroups = [
     ['Ağ', [['/', 'home', 'Ana sayfa', 1], ['/internet', 'globe', 'İnternet', 1], ['/devices', 'devices', 'Cihazlar', 1], ['/wifi', 'wifi', 'Wi-Fi', 1], ['/lan', 'router', 'Yerel ağ'], ['/ports', 'shield', 'Port yönlendirme']]],
@@ -1071,11 +1071,84 @@
       <div class="x-form-foot"><span class="form-error" id="x-notify-error"></span><button type="button" class="btn small" data-x-testnotify>Test mesajı</button><button class="btn small primary" type="submit">Kaydet</button></div></form></section>`;
   }
   function backupCard() {
-    return `<section class="card">${cardHead('save', 'Yedekleme')}<p class="field-hint">Tüm router ayarlarının (ağ, Wi-Fi, NetOS cihaz kayıtları, SQM, mwan3…) yedeğini indirin. Geri yükleme router'ı yeniden başlatır.</p>
-      <div class="x-inline"><button class="btn small primary" data-x-backup>Yedeği indir</button></div>
-      <div class="x-inline"><input class="field" type="file" id="x-restore-file" accept=".tar.gz,.tgz,application/gzip"><button class="btn small danger" data-x-restore>Geri yükle</button></div>
-      <span class="form-error" id="x-backup-error"></span></section>`;
+    let b = (state.bk = state.bk || {}),
+      inc = ['Ağ ve internet', 'Wi-Fi', 'Cihaz kayıtları', 'Çoklu hat', 'SQM', 'AdGuard', 'HTTPS sertifikası', 'Entegrasyonlar'];
+    let restore;
+    if (b.restarting)
+      restore = `<div class="bk-restart"><span class="bk-spin"></span><div><strong>Router yeniden başlıyor…</strong><p>${esc(b.restarting)}</p></div></div>`;
+    else if (b.info) {
+      let i = b.info,
+        ipChange = i.lanIp && i.currentIp && i.lanIp !== i.currentIp,
+        yes = (v, t) => `<li class="${v ? 'ok' : 'no'}">${v ? '✓' : '–'} ${t}</li>`;
+      restore = `<div class="bk-summary"><div class="bk-file">${icon('save')}<div><strong>${esc(b.fileName)}</strong><span>${esc(i.hostname || 'Router')} · ${esc(i.lanIp || '?')} · ${esc(i.date || '')} · ${i.files} dosya</span></div></div>
+        <ul class="bk-has">${yes(i.netos, 'NetOS ayarları')}${yes(i.wifi, 'Wi-Fi')}${yes(i.mwan3, 'Çoklu hat')}${yes(i.adguard, 'AdGuard')}${yes(i.ca, 'HTTPS sertifikası')}</ul>
+        ${ipChange ? `<div class="alert alert-strong">Bu yedekte router adresi <b>${esc(i.lanIp)}</b> (şu an ${esc(i.currentIp)}). Geri yüklemeden sonra panele <b>http://${esc(i.lanIp)}/netos/</b> adresinden girin; bilgisayarınızın yeni adres alması için ağ bağlantısını kapatıp açmanız gerekebilir.</div>` : ''}
+        <p class="field-hint">Şu anki tüm ayarlar bu yedektekilerle değişir ve router yeniden başlar; internet yaklaşık 1–2 dakika kesilir.</p>
+        <div class="bk-actions"><button class="btn small" type="button" data-bk-cancel>Vazgeç</button><button class="btn small danger" type="button" data-x-restore>Geri yükle ve yeniden başlat</button></div></div>`;
+    } else
+      restore = `<label class="bk-drop${b.busy ? ' busy' : ''}" data-bk-drop><input type="file" id="x-restore-file" accept=".tar.gz,.tgz,application/gzip">${icon('download')}<strong>${b.busy ? 'Yedek inceleniyor…' : 'Yedek dosyasını buraya bırakın'}</strong><span>ya da <u>dosya seçin</u> · .tar.gz, en fazla 500 KB</span></label>`;
+    return `<section class="card bk-card">${cardHead('save', 'Yedekleme')}
+      <div class="bk-part"><div class="bk-title"><strong>Yedek al</strong><span>Router'ın bütün ayarları tek dosyada; başka bir kuruluma ya da sıfırlamadan sonra geri yüklenebilir.</span></div>
+        <div class="bk-chips">${inc.map((x) => `<span>${x}</span>`).join('')}</div>
+        <div class="bk-row"><button class="btn small primary" type="button" data-x-backup>${icon('download')}Yedeği indir</button><span class="field-hint">Dosya şifreler ve anahtarlar içerir; güvenli bir yerde saklayın. İstatistik geçmişi yedeğe girmez.</span></div></div>
+      <div class="bk-part"><div class="bk-title"><strong>Geri yükle</strong><span>Yüklemeden önce yedeğin içeriği gösterilir.</span></div>${restore}</div>
+      <span class="form-error" id="x-backup-error">${esc(b.error || '')}</span></section>`;
   }
+  // yedek seçilince önce router'a incelet (hiçbir şey değişmez)
+  async function bkInspect(file) {
+    let b = (state.bk = { busy: true });
+    redrawBackup();
+    try {
+      b.info = await NP.inspectBackup(file);
+      b.file = file;
+      b.fileName = file.name;
+    } catch (x) {
+      b.error = x.message;
+    }
+    b.busy = false;
+    redrawBackup();
+  }
+  function redrawBackup() {
+    let c = document.querySelector('.bk-card');
+    if (c) c.outerHTML = backupCard();
+  }
+  // geri yüklemeden sonra router geri gelince sayfayı yenile
+  function bkWaitReboot() {
+    let t0 = Date.now(), ip = state.bk.info?.lanIp, host = ip && ip !== location.hostname ? ip : location.hostname;
+    let tick = async () => {
+      let s = Math.round((Date.now() - t0) / 1000);
+      state.bk.restarting = `${s} sn geçti. Router açılınca sayfa kendiliğinden yenilenecek.`;
+      redrawBackup();
+      if (s > 25) {
+        try {
+          await fetch(`${location.protocol}//${host}/netos/index.html?${Date.now()}`, { cache: 'no-store', mode: host === location.hostname ? 'same-origin' : 'no-cors' });
+          location.href = `${location.protocol}//${host}/netos/`;
+          return;
+        } catch (_) {}
+      }
+      if (s < 300) setTimeout(tick, 3000);
+      else { state.bk.restarting = 'Router 5 dakikadır yanıt vermiyor. Elle yenileyin; olmazsa routerın adresini kontrol edin.'; redrawBackup(); }
+    };
+    tick();
+  }
+  document.addEventListener('change', (e) => {
+    if (e.target.id === 'x-restore-file' && e.target.files[0]) bkInspect(e.target.files[0]);
+  });
+  ['dragover', 'dragleave', 'drop'].forEach((ev) =>
+    document.addEventListener(ev, (e) => {
+      let d = e.target.closest?.('[data-bk-drop]');
+      if (!d) return;
+      e.preventDefault();
+      d.classList.toggle('over', ev === 'dragover');
+      if (ev === 'drop' && e.dataTransfer.files[0]) bkInspect(e.dataTransfer.files[0]);
+    }),
+  );
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-bk-cancel]')) {
+      state.bk = {};
+      redrawBackup();
+    }
+  });
   function tunnelCard() {
     let t = state.xTunnel, cf = (state.cf = state.cf || {});
     let head = cardHead('cloud', 'Uzaktan erişim (Cloudflare Tunnel)');
@@ -3705,14 +3778,14 @@
       return done();
     }
     if (b.matches('[data-x-restore]')) {
-      let f = document.getElementById('x-restore-file').files[0];
+      let f = state.bk?.file;
       if (!f) return xErr('x-backup-error', 'Önce bir yedek dosyası seçin');
-      if (!confirm(`"${f.name}" geri yüklenecek. Mevcut tüm ayarlar bu yedektekilerle değişecek ve router yeniden başlayacak (~1 dakika). Devam edilsin mi?`)) return;
+      if (!confirm(`"${f.name}" geri yüklenecek. Mevcut tüm ayarlar bu yedektekilerle değişecek ve router yeniden başlayacak. Devam edilsin mi?`)) return;
       let done = xBusy(b, 'Yükleniyor…');
       try {
         await NP.restoreBackup(f);
         toast('Yedek yüklendi, router yeniden başlıyor…');
-        xErr('x-backup-error', 'Router yeniden başlıyor; yaklaşık 1 dakika sonra sayfayı yenileyin.');
+        bkWaitReboot();
       } catch (x) {
         done();
         xErr('x-backup-error', x.message);

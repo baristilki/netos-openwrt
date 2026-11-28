@@ -2867,3 +2867,37 @@ input.field {
 .ssl-box p { margin: 0; font-size: 13px; color: var(--muted); }
 .ssl-steps { margin: 0; padding-left: 18px; display: grid; gap: 4px; font-size: 12px; color: var(--muted); }
 .ssl-steps b { color: var(--text); }
+
+/* ── Yedekleme kartı ── */
+.bk-card { display: grid; gap: 14px; }
+.bk-part { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); }
+.bk-title { display: grid; gap: 2px; }
+.bk-title strong { font-size: 14px; }
+.bk-title span { font-size: 12px; color: var(--muted); }
+.bk-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.bk-chips span { padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--accent); background: var(--accent-soft); }
+.bk-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.bk-row .btn svg, .bk-actions .btn svg { width: 15px; height: 15px; margin-right: 6px; vertical-align: -3px; }
+.bk-row .field-hint { flex: 1 1 200px; margin: 0; }
+.bk-drop { position: relative; display: grid; justify-items: center; gap: 4px; padding: 22px 14px; border: 1.5px dashed var(--line); border-radius: 12px; background: var(--surface); text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+.bk-drop:hover, .bk-drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.bk-drop.busy { opacity: .7; pointer-events: none; }
+.bk-drop input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.bk-drop svg { width: 26px; height: 26px; color: var(--accent); transform: rotate(180deg); }
+.bk-drop strong { font-size: 13px; }
+.bk-drop span { font-size: 12px; color: var(--muted); }
+.bk-summary { display: grid; gap: 10px; }
+.bk-file { display: flex; gap: 10px; align-items: center; min-width: 0; }
+.bk-file svg { width: 22px; height: 22px; flex: none; color: var(--accent); }
+.bk-file div { display: grid; min-width: 0; }
+.bk-file strong { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bk-file span { font-size: 12px; color: var(--muted); }
+.bk-has { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; }
+.bk-has .ok { color: var(--green); }
+.bk-has .no { color: var(--muted); }
+.bk-summary .field-hint { margin: 0; }
+.bk-actions { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+.bk-restart { display: flex; gap: 12px; align-items: center; padding: 6px 2px; }
+.bk-restart p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
+.bk-spin { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 3px solid var(--accent-soft); border-top-color: var(--accent); animation: bkspin 0.9s linear infinite; }
+@keyframes bkspin { to { transform: rotate(360deg); } }

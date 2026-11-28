@@ -1,0 +1,7 @@
+/etc/netpanel/ca/
+/etc/netpanel/known
+/etc/netpanel/events.log
+/etc/netpanel/newdev.log
+/etc/netpanel/speedtest.log
+/etc/netpanel/unauthenticated.json.orig
+/www/netos-ca.crt

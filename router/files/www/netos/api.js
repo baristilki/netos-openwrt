@@ -988,13 +988,24 @@
     return { name: r.name, size: r.size };
   }
   // file: <input type=file> ile seçilen .tar.gz. Başarılıysa router yeniden başlar (~1 dk).
-  async function restoreBackup(file) {
+  async function backupData(file) {
     if (!file) throw new ApiError('Dosya seçin', 'validate');
+    if (!/\.(tar\.gz|tgz)$/i.test(file.name)) throw new ApiError('Yedek dosyası .tar.gz olmalı', 'validate');
     if (file.size > 500000) throw new ApiError('Dosya çok büyük (en fazla 500 KB)', 'validate');
     const buf = new Uint8Array(await file.arrayBuffer());
+    if (buf[0] !== 0x1f || buf[1] !== 0x8b) throw new ApiError('Bu dosya bir yedek arşivi değil (gzip değil)', 'validate');
     let bin = '';
     for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
-    return npCall('backup_restore', { data: btoa(bin) });
+    return btoa(bin);
+  }
+  // Geri yüklemeden önce yedeği incele -> { hostname, lanIp, currentIp, files, date, netos, ca, wifi, mwan3, adguard }
+  async function inspectBackup(file) {
+    const r = await npCall('backup_restore', { data: await backupData(file), dry: true });
+    return { hostname: r.hostname || '', lanIp: r.lan_ip || '', currentIp: r.current_ip || '', files: r.files || 0, date: r.date || '',
+      netos: !!r.netos, ca: !!r.ca, wifi: !!r.wifi, mwan3: !!r.mwan3, adguard: !!r.adguard };
+  }
+  async function restoreBackup(file) {
+    return npCall('backup_restore', { data: await backupData(file) });
   }
 
   /* ── Cloudflare Tunnel ──────────────────────────────────────────────────── */
@@ -1899,7 +1910,7 @@
       'netpanel.tz_get': () => ({ ...demoTz, now: new Date(Date.now() + (demoTz.zonename === 'Europe/Istanbul' ? 0 : -3 * 3600e3)).toISOString().slice(0, 16).replace('T', ' '), offset: demoTz.zonename === 'Europe/Istanbul' ? '+0300' : '+0000' }),
       'netpanel.tz_set': (a) => { demoTz.zonename = a.zone; return { ok: true, zonename: a.zone }; },
       'netpanel.backup_create': () => ({ ok: true, name: 'netos-yedek-demo.tar.gz', size: 18, data: btoa('NetOS demo yedek\n') }),
-      'netpanel.backup_restore': (a) => (a.data && a.data.length > 10 ? { ok: false, error: 'Demo modunda geri yükleme yapılmaz' } : { ok: false, error: 'Bu bir OpenWrt yedeği değil (etc/config yok)' }),
+      'netpanel.backup_restore': (a) => (a.dry ? { ok: true, dry: true, hostname: 'OpenWrt', lan_ip: '192.168.1.1', current_ip: '192.168.1.1', files: 53, date: '2026-11-28 08:47', netos: true, ca: true, wifi: true, mwan3: true, adguard: true } : { ok: false, error: 'Demo modunda geri yükleme yapılmaz' }),
       'netpanel.cf_status': () => JSON.parse(JSON.stringify(demoCf)),
       'netpanel.integ_get': () => ({ huawei: !!hw.enabled, cloudflare: demoInteg.cloudflare, scanner: demoInteg.scanner, vpn: demoInteg.vpn, adguard: demoInteg.adguard, tplink: demoTp.enabled, cloudflared: true, adguardhome: true, curl: true }),
       'netpanel.ag_status': () => ({ installed: true, configured: demoAg.configured, running: demoAg.configured, active: demoAg.active, creds: demoAg.configured, web_port: 3000, lan_ip: '192.168.1.1',
@@ -2110,7 +2121,7 @@
     getWans: () => getWans(), getSystem, changePassword, scanWeb,
     getWanConfig, setWan, setWanMode, getPorts, addWan, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
     getUsage, getApps, getHeavy, getSsl, setupSsl, getPingHistory, pingHost, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
-    downloadBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
+    downloadBackup, inspectBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
     getPortForwards, savePortForward, deletePortForward, setUpnp, setFirewall, getConnections, getLan, setLan, confirmLan, revertLan,
     getGuestWifi, setGuestWifi, extendGuestWifi, getGuestQr, getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,
     getTplink, setTplinkConfig, setTplinkBand, saveTplinkWifi,

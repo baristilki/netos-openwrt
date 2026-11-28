@@ -6,6 +6,7 @@
 [ -f /etc/crontabs/root ] && sed -i '\#/usr/libexec/netpanel/collect.sh#d; \#/usr/libexec/netpanel/update.sh#d' /etc/crontabs/root && /etc/init.d/cron restart
 [ -f /etc/netpanel/unauthenticated.json.orig ] && cp /etc/netpanel/unauthenticated.json.orig /usr/share/rpcd/acl.d/unauthenticated.json
 rm -f /www/cgi-bin/netos-auth; rm -rf /tmp/netos-auth
+rm -f /lib/upgrade/keep.d/netpanel
 rm -rf /www/netos /www/netpanel /usr/share/netpanel /usr/libexec/netpanel /tmp/netpanel-hw /tmp/netpanel-collect
 rm -f /usr/libexec/rpcd/netpanel /usr/sbin/netpanel-apply /usr/share/rpcd/acl.d/netpanel.json \
 	/etc/init.d/netpanel /etc/hotplug.d/dhcp/90-netpanel /etc/hotplug.d/iface/90-netpanel /tmp/netpanel.* /tmp/netpanel-*
