@@ -91,7 +91,7 @@
       sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
       moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
     })[name] || '';
-  const APP_VERSION = '1.3.4';
+  const APP_VERSION = '1.3.5';
   // [yol, ikon, ad, mobil alt menüde mi (değilse "Menü" sayfasında)]
   const navGroups = [
     ['Ağ', [['/', 'home', 'Ana sayfa', 1], ['/internet', 'globe', 'İnternet', 1], ['/devices', 'devices', 'Cihazlar', 1], ['/wifi', 'wifi', 'Wi-Fi', 1], ['/lan', 'router', 'Yerel ağ'], ['/ports', 'shield', 'Port yönlendirme']]],
@@ -1870,9 +1870,9 @@
   const idleMin = () => {
     try {
       let v = localStorage.getItem(IDLE_KEY);
-      return v == null ? 30 : +v;
+      return v == null ? 60 : +v;
     } catch (_) {
-      return 30;
+      return 60;
     }
   };
   function loadSec(page) {
@@ -4790,7 +4790,9 @@
   });
   // Otomatik oturum kapatma: işlem yapılmazsa
   let lastAct = Date.now();
-  ['pointerdown', 'keydown', 'wheel', 'touchstart'].forEach((ev) => window.addEventListener(ev, () => (lastAct = Date.now()), { passive: true }));
+  // fare hareketi ve sekmeye dönmek de etkinlik sayılır (yalnız tıklama değil)
+  ['pointerdown', 'pointermove', 'keydown', 'wheel', 'touchstart', 'focus'].forEach((ev) => window.addEventListener(ev, () => (lastAct = Date.now()), { passive: true }));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) lastAct = Math.max(lastAct, Date.now() - 60000); });
   setInterval(async () => {
     let m = idleMin();
     if (!m || !NP.hasSession() || NP.isMock) return;

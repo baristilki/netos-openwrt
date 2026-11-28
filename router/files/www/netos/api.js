@@ -237,7 +237,7 @@
       }
     }
     try {
-      d = await ubus('session', 'login', { username: username || 'root', password: password || '' }, { anon: true });
+      d = await ubus('session', 'login', { username: username || 'root', password: password || '', timeout: 3600 }, { anon: true });
     } catch (e) {
       if (e.code === 6) throw new ApiError('Kullanıcı adı veya şifre hatalı', 'badpass');
       throw e;

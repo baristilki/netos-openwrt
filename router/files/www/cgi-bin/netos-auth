@@ -36,11 +36,11 @@ const user = '' + (body.username || 'root'), pass = '' + (body.password ?? '');
 if (length(user) > 32 || !match(user, /^[A-Za-z0-9_.-]+$/)) reply('400 Bad Request', { ok: false, error: 'Geçersiz kullanıcı adı' });
 
 const conn = ubus.connect();
-const r = conn ? conn.call('session', 'login', { username: user, password: pass }) : null;
+const r = conn ? conn.call('session', 'login', { username: user, password: pass, timeout: 3600 }) : null;
 if (type(r?.ubus_rpc_session) == 'string') {
 	system(GUARD + ' ok ' + q(ip));
 	system('logger -p authpriv.info -t netos ' + q('giriş: ' + user + ', ' + ip));
-	reply('200 OK', { ok: true, ubus_rpc_session: r.ubus_rpc_session, timeout: r.timeout ?? 300 });
+	reply('200 OK', { ok: true, ubus_rpc_session: r.ubus_rpc_session, timeout: r.timeout ?? 3600 });
 }
 const f = split(sh(GUARD + ' fail ' + q(ip) + ' NetOS'), ' ');
 const remaining = int(f[0] ?? 0), lock = int(f[1] ?? 0);

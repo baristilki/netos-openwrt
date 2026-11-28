@@ -2851,15 +2851,15 @@ input.field {
    Ölçüler px olduğu için 'zoom' ile tüm iç kutular (yazı, boşluk, grafik) birlikte büyür. */
 @media (min-width: 1900px) {
   .content { max-width: 1320px; zoom: 1.12; }
-  .drawer, .bell-panel { zoom: 1.08; }
+  :root { --drawer-z: 1.08; }
 }
 @media (min-width: 2300px) {
   .content { max-width: 1380px; zoom: 1.25; }
-  .drawer, .bell-panel { zoom: 1.15; }
+  :root { --drawer-z: 1.15; }
 }
 @media (min-width: 3200px) {
   .content { max-width: 1440px; zoom: 1.5; }
-  .drawer, .bell-panel { zoom: 1.35; }
+  :root { --drawer-z: 1.35; }
 }
 
 /* ── Yerel HTTPS sertifikası ── */
@@ -2919,3 +2919,8 @@ input.field {
 @media (min-width: 1900px) { :root { --side-z: 1.1; } }
 @media (min-width: 2300px) { :root { --side-z: 1.2; } }
 @media (min-width: 3200px) { :root { --side-z: 1.4; } }
+
+/* Yan panel ve zil ölçeği: zoom yüksekliği de büyüttüğü için panel yüksekliği ölçeğe bölünür (ekrana tam sığar, içi kayar) */
+:where(:root) { --drawer-z: 1; }
+.drawer, .bell-panel { zoom: var(--drawer-z); }
+.drawer { height: calc(100dvh / var(--drawer-z)); }
