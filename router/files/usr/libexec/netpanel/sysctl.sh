@@ -16,7 +16,12 @@ num() { case "$1" in '' | *[!0-9]*) return 1 ;; esac; }
 jstr() { printf '"%s"' "$(printf '%s' "$1" | sed 's/[\\"]/\\&/g' | tr -d '\000-\037')"; }
 
 # TLS kütüphanesi + sertifika (ya da sertifikayı üretecek px5g)
-https_available() { ls /usr/lib/libustream-ssl*.so* /lib/libustream-ssl*.so* >/dev/null 2>&1 && { [ -x /usr/bin/px5g ] || [ -s /etc/uhttpd.crt ]; }; }
+# Not: kütüphane yalnız /lib ya da yalnız /usr/lib altında olabilir; tek ls ikisinden biri yoksa hata verirdi
+https_available() {
+	local f ok=0
+	for f in /usr/lib/libustream-ssl*.so* /lib/libustream-ssl*.so*; do [ -e "$f" ] && ok=1; done
+	[ $ok = 1 ] && { [ -x /usr/bin/px5g ] || [ -s /etc/uhttpd.crt ]; }
+}
 
 sec_get() {
 	local empty=0 hosts
