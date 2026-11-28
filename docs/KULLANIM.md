@@ -18,6 +18,8 @@ Panel adresi: `http://192.168.1.1/netos/` (router IP'niz farklıysa onu yazın).
 - [11. Telefonla dışarıdan erişim: VPN ve Cloudflare Tunnel](#11-telefonla-dışarıdan-erişim-vpn-ve-cloudflare-tunnel)
 - [12. Telegram bildirimleri](#12-telegram-bildirimleri)
 - [13. Yedekleme ve güncelleme](#13-yedekleme-ve-güncelleme)
+- [14. Uyarısız HTTPS (kendi sertifika otoritemiz)](#14-uyarısız-https-kendi-sertifika-otoritemiz)
+- [15. Telefona uygulama olarak eklemek](#15-telefona-uygulama-olarak-eklemek)
 - [Sorun giderme](#sorun-giderme)
 
 ---
@@ -118,6 +120,24 @@ Seçenekler: hat koptu/geldi, yeni cihaz, eve geldi/ayrıldı, sistem uyarılar�
 - **Sistem > Yedekleme**: ayar yedeğini indirin / geri yükleyin.
 - **Sistem > Güncelleme**: GitHub'daki son sürümü tek tıkla kurar; ayarlar ve cihaz kayıtları korunur.
   "Otomatik güncelle" açıksa gece kendisi kurar.
+
+## 14. Uyarısız HTTPS (kendi sertifika otoritemiz)
+Tarayıcıların "bağlantı güvenli değil" uyarısı, routerın kendi imzaladığı sertifikadan gelir.
+1. **Sistem > Güvenlik > HTTPS** bölümünde **Güvenilir sertifika oluştur**'a basın. NetOS yalnız yerel adreslere
+   (192.168.x.x, .lan) sertifika verebilen bir otorite oluşturur ve panele sertifikayı kurar; sertifika kendiliğinden yenilenir.
+2. **Kök sertifikayı indir** ile `NetOS-kok-sertifika.crt` dosyasını alın ve her cihaza **bir kez** yükleyin:
+   - **Windows:** dosyayı açın → *Sertifika yükle* → *Geçerli kullanıcı* → *Güvenilen Kök Sertifika Yetkilileri*.
+   - **iPhone / iPad:** Safari ile indirin → *Ayarlar > İndirilen profil > Yükle* → sonra *Genel > Hakkında > Sertifika Güven Ayarları*'ndan açın.
+   - **Android:** *Ayarlar > Güvenlik > Diğer güvenlik ayarları > Sertifika yükle > CA sertifikası*.
+   - **Firefox:** kendi deposunu kullanır: *Ayarlar > Gizlilik ve Güvenlik > Sertifikalar > İçe aktar*.
+3. Panele `https://192.168.1.1/netos/` ile girin; uyarı çıkmaz.
+
+## 15. Telefona uygulama olarak eklemek
+NetOS, ana ekrana eklenince kendi ikonu ve adıyla tam ekran açılır.
+- **iPhone / iPad (Safari):** paneli açın → Paylaş düğmesi → **Ana Ekrana Ekle**.
+- **Android (Chrome):** ⋮ menüsü → **Ana ekrana ekle** / **Uygulamayı yükle**.
+- **Windows / Mac (Chrome, Edge):** adres çubuğundaki **Yükle** simgesi. Uygulama olarak yükleme için
+  14. bölümdeki güvenilir HTTPS gerekir.
 
 ---
 

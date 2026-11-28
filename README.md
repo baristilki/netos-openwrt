@@ -43,7 +43,9 @@ LuCI'ye dokunmaz, yanına kurulur: `http://<router-ip>/netos/`
 - Yerel ağ: router IP'si, DHCP aralığı, kira süresi, DNS (IP değişiminde 3 dk geri alma)
 - Port yönlendirme (hazır şablonlar, çakışma kontrolü), UPnP, DMZ; CGNAT / modem arkası uyarısı
 - Güvenlik duvarı: internetten gelen ping'e yanıt, flow offloading aç/kapa
-- Giriş deneme sınırı (NetOS/LuCI/SSH: 5 hatada 5-15-60 dk kilit), HTTPS, otomatik oturum kapatma
+- Giriş deneme sınırı (NetOS/LuCI/SSH: 5 hatada 5-15-60 dk kilit), otomatik oturum kapatma
+- **Uyarısız HTTPS**: yalnız yerel adreslere sertifika verebilen kendi sertifika otoritesi, otomatik yenileme
+- **Telefona uygulama olarak ekleme** (iPhone, Android, Windows): kendi ikonu ve adıyla tam ekran
 - WireGuard VPN sunucusu (cihaz başına QR kod), Cloudflare Tunnel (port açmadan dışarıdan erişim)
 - Reklam engelleme (AdGuard Home, tek tıkla kurulum)
 - Ağ tarayıcı: IP tarama, cihaz tipi tahmini, açık port, Wake-on-LAN, CSV

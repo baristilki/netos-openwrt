@@ -19,6 +19,8 @@ Dashboard address: `http://192.168.1.1/netos/` (use your router's IP if it diffe
 - [11. Remote access from your phone: VPN and Cloudflare Tunnel](#11-remote-access-from-your-phone-vpn-and-cloudflare-tunnel)
 - [12. Telegram notifications](#12-telegram-notifications)
 - [13. Backup and updates](#13-backup-and-updates)
+- [14. Warning-free HTTPS (your own certificate authority)](#14-warning-free-https-your-own-certificate-authority)
+- [15. Adding it to your phone as an app](#15-adding-it-to-your-phone-as-an-app)
 - [Troubleshooting](#troubleshooting)
 
 ---
@@ -121,6 +123,25 @@ Options: line down/up, new device, home/away, system alerts, auto-block new devi
 - **System > Backup**: download / restore a settings backup.
 - **System > Update**: installs the latest GitHub release with one click; settings and device records are kept.
   With "Auto-update" on, it installs updates by itself at night.
+
+## 14. Warning-free HTTPS (your own certificate authority)
+The browser's "connection is not private" warning comes from the router's self-signed certificate.
+1. On **System > Security > HTTPS** click **Create trusted certificate**. NetOS creates an authority that can only issue
+   certificates for local addresses (192.168.x.x, .lan) and installs a certificate for the dashboard; it renews itself.
+2. **Download root certificate** (`NetOS-kok-sertifika.crt`) and install it **once** on each device:
+   - **Windows:** open the file → *Install Certificate* → *Current User* → *Trusted Root Certification Authorities*.
+   - **iPhone / iPad:** download with Safari → *Settings > Profile Downloaded > Install* → then enable it under
+     *General > About > Certificate Trust Settings*.
+   - **Android:** *Settings > Security > More security settings > Install a certificate > CA certificate*.
+   - **Firefox:** uses its own store: *Settings > Privacy & Security > Certificates > Import*.
+3. Open `https://192.168.1.1/netos/`; no warning appears.
+
+## 15. Adding it to your phone as an app
+Added to the home screen, NetOS opens full screen with its own icon and name.
+- **iPhone / iPad (Safari):** open the dashboard → Share → **Add to Home Screen**.
+- **Android (Chrome):** ⋮ menu → **Add to Home screen** / **Install app**.
+- **Windows / Mac (Chrome, Edge):** the **Install** icon in the address bar. Installing as an app requires the
+  trusted HTTPS from section 14.
 
 ---
 

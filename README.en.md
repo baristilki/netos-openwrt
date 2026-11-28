@@ -44,7 +44,9 @@ It doesn't touch LuCI; it installs next to it: `http://<router-ip>/netos/`
 - Local network: router IP, DHCP range, lease time, DNS (3-min rollback when the IP changes)
 - Port forwarding (templates, conflict check), UPnP, DMZ; CGNAT / behind-another-modem warning
 - Firewall: reply to ping from the internet, flow offloading on/off
-- Login attempt limit (NetOS/LuCI/SSH: 5 failures → 5-15-60 min lock), HTTPS, automatic logout
+- Login attempt limit (NetOS/LuCI/SSH: 5 failures → 5-15-60 min lock), automatic logout
+- **Warning-free HTTPS**: your own certificate authority, limited to local addresses, auto-renewed
+- **Install as an app** (iPhone, Android, Windows): full screen with its own icon and name
 - WireGuard VPN server (QR code per device), Cloudflare Tunnel (remote access without open ports)
 - Ad blocking (AdGuard Home, one-click install)
 - Network scanner: IP scan, device-type guess, open ports, Wake-on-LAN, CSV
