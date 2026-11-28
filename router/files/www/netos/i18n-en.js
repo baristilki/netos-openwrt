@@ -522,6 +522,9 @@ window.NETOS_EN = {
   "Router yeniden başlıyor…": "Router is restarting…",
   "Yedek dosyası .tar.gz olmalı": "The backup file must be .tar.gz",
   "Bu dosya bir yedek arşivi değil (gzip değil)": "This file isn’t a backup archive (not gzip)",
+  "Yönetim ve bakım": "Administration & maintenance",
+  "Açıkken işlemci yükü azalır ama hız sınırı, cihaz hızları ve oyun önceliği çalışmaz.": "Lowers CPU load when on, but speed limits, device speeds and gaming priority stop working.",
+  "Uyarı gizlendi. Sistem > Yönetim ve bakım bölümünden değiştirebilirsiniz.": "Warning hidden. You can change this under System > Administration & maintenance.",
 };
 
 /* Parça çevirileri: tam eşleşme yoksa metnin içinde geçen bu parçalar değiştirilir (değişken içeren metinler için). Uzundan kısaya uygulanır. */

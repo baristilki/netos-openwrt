@@ -91,7 +91,7 @@
       sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
       moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
     })[name] || '';
-  const APP_VERSION = '1.3.3';
+  const APP_VERSION = '1.3.4';
   // [yol, ikon, ad, mobil alt menüde mi (değilse "Menü" sayfasında)]
   const navGroups = [
     ['Ağ', [['/', 'home', 'Ana sayfa', 1], ['/internet', 'globe', 'İnternet', 1], ['/devices', 'devices', 'Cihazlar', 1], ['/wifi', 'wifi', 'Wi-Fi', 1], ['/lan', 'router', 'Yerel ağ'], ['/ports', 'shield', 'Port yönlendirme']]],
@@ -1037,11 +1037,6 @@
   }
 
   /* ── Sistem sayfası ekleri ── */
-  function systemExtras() {
-    if (!state.xTz && !state.xTzError) loadX('xTz', () => NP.getTimezone(), '/system');
-    if (!state.xNotify && !state.xNotifyError) loadX('xNotify', () => NP.getNotify(), '/system');
-    return securityCard() + maintenanceCard() + `<div class="span-6 x-stack">${tzCard()}${backupCard()}</div>` + notifyCard();
-  }
   function tzCard() {
     let t = state.xTz;
     let body = !t
@@ -1461,7 +1456,7 @@
       ${u.available && u.notes ? `<details class="upd-notes" open><summary>v${esc(u.latest)} yenilikleri${u.published ? ` · ${new Date(u.published).toLocaleDateString('tr-TR')}` : ''}</summary><pre>${esc(u.notes)}</pre>${u.url ? `<a href="${esc(u.url)}" target="_blank" rel="noopener">GitHub’da gör ↗</a>` : ''}</details>` : ''}
       <div class="toggle-line"><div><strong>Otomatik güncelle</strong><p>Her gece 04:30 civarı yeni sürüm varsa kurulur. Kapalıyken yalnız bildirim gönderilir (Telegram açıksa).</p></div><input class="switch" type="checkbox" data-upd-auto${u.auto ? ' checked' : ''}></div>
       <div class="x-form-foot"><span class="field-hint">${u.checked ? `Son kontrol: ${new Date(u.checked).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''} · ${esc(u.repo)}</span><button class="btn small" type="button" data-upd-check>Denetle</button>${u.available ? `<button class="btn small primary" type="button" data-upd-apply>v${esc(u.latest)} sürümüne güncelle</button>` : ''}</div>`;
-    return `<section class="card span-7" id="upd-card">${cardHead('download', 'Güncelleme')}${body}</section>`;
+    return `<section class="card" id="upd-card">${cardHead('download', 'Güncelleme')}${body}</section>`;
   }
   function redrawUpdate() {
     let el = document.getElementById('upd-card');
@@ -1953,7 +1948,7 @@
       })
       .join('')}</div>`;
   }
-  function maintenanceCard() {
+  function adminCard() {
     if (!state.xOpt && !state.xOptError) loadX('xOpt', () => NP.getSysOpt(), '/system');
     let o = state.xOpt;
     let days = ['', 'Pazartesi', 'Salı', 'Çarşamba', 'Perşembe', 'Cuma', 'Cumartesi', 'Pazar'];
@@ -1964,8 +1959,10 @@
         <div class="field-wrap"><label>Otomatik yeniden başlatma</label><select class="field" name="rebootMode"><option value="off"${o.rebootMode === 'off' ? ' selected' : ''}>Kapalı</option><option value="daily"${o.rebootMode === 'daily' ? ' selected' : ''}>Her gün</option><option value="weekly"${o.rebootMode === 'weekly' ? ' selected' : ''}>Her hafta</option></select></div>
         <div class="x-grid2" id="reboot-when"${o.rebootMode === 'off' ? ' hidden' : ''}><div class="field-wrap" id="reboot-day"${o.rebootMode === 'weekly' ? '' : ' hidden'}><label>Gün</label><select class="field" name="rebootDay">${days.slice(1).map((d, i) => `<option value="${i + 1}"${o.rebootDay === i + 1 ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
         <div class="field-wrap"><label>Saat</label><select class="field" name="rebootHour">${Array.from({ length: 24 }, (_, h) => `<option value="${h}"${+o.rebootHour === h ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></div></div>
-        <div class="x-form-foot"><a class="link-btn" href="#/logs">Sistem günlüğü →</a><button class="btn small primary" type="submit">Kaydet</button></div></form>`;
-    return `<section class="card span-6">${cardHead('system', 'Bakım')}${body}</section>`;
+        <div class="x-form-foot"><button class="btn small primary" type="submit">Kaydet</button></div></form>`;
+    let actions = `<div class="adm-actions"><button class="btn small danger" type="button" data-reboot>${icon('system')}Yeniden başlat</button><a class="btn small" href="#/logs">Sistem günlüğü</a><a class="btn small" href="/cgi-bin/luci/">LuCI ↗</a><button class="btn small" type="button" data-logout>${icon('logout')}Çıkış yap</button></div>`;
+    let offload = `<div class="toggle-line"><div><strong>Flow offloading</strong><p>Açıkken işlemci yükü azalır ama hız sınırı, cihaz hızları ve oyun önceliği çalışmaz.</p></div><input class="switch" type="checkbox" data-offload ${(state.sqm?.offload ?? state.status.offload) ? 'checked' : ''}></div>`;
+    return `<section class="card adm-card">${cardHead('system', 'Yönetim ve bakım')}${actions}${offload}${body}</section>`;
   }
 
   /* ── Sistem günlüğü ── */
@@ -2476,7 +2473,8 @@
       cpu = Number(x.cpu || 0),
       pct = (n) => Math.max(0, Math.min(100, Number(n) || 0)),
       tone = (n) => (n >= 95 ? 'danger' : n >= 80 ? 'warn' : '');
-    return `${pageHead('Cihaz y&#246;netimi', 'Sistem', 'Router durumu ve y&#246;netim se&#231;enekleri.')}<div class="grid"><section class="card span-12">${cardHead('system', 'Kaynaklar')}<div class="resource-grid"><div class="resource"><div class="resource-head"><strong>CPU</strong><b class="${tone(cpu)}">${x.cpuEstimated ? '~' : ''}%${cpu}</b></div><div class="progress"><i class="${tone(cpu)}" style="width:${pct(cpu)}%"></i></div><small>${esc(x.cores || '—')} &#231;ekirdek · ${esc(x.model || o.model || '')} · Y&#252;k ${esc((x.load || o.load || []).join(' · ') || '—')}</small></div><div class="resource"><div class="resource-head"><strong>RAM</strong><b class="${tone(m.percent)}">%${esc(m.percent ?? 0)}</b></div><div class="progress"><i class="${tone(m.percent)}" style="width:${pct(m.percent)}%"></i></div><small>${esc(NP.fmt.bytes(m.used || 0))} / ${esc(NP.fmt.bytes(m.total || 0))}</small></div><div class="resource"><div class="resource-head"><strong>Disk</strong><b class="${tone(d.percent)}">%${esc(d.percent ?? 0)}</b></div><div class="progress"><i class="${tone(d.percent)}" style="width:${pct(d.percent)}%"></i></div><small>${esc(NP.fmt.bytes(d.used || 0))} / ${esc(NP.fmt.bytes(d.total || 0))}</small></div>${x.temp != null ? `<div class="resource"><strong>S&#305;cakl&#305;k</strong> ${esc(x.temp)} ?C</div>` : ''}</div></section><section class="card span-7">${cardHead('router', 'Cihaz bilgileri')}<div class="info-grid">${[
+    let resCard = `<section class="card span-12">${cardHead('system', 'Kaynaklar')}<div class="resource-grid"><div class="resource"><div class="resource-head"><strong>CPU</strong><b class="${tone(cpu)}">${x.cpuEstimated ? '~' : ''}%${cpu}</b></div><div class="progress"><i class="${tone(cpu)}" style="width:${pct(cpu)}%"></i></div><small>${esc(x.cores || '—')} &#231;ekirdek · ${esc(x.model || o.model || '')} · Y&#252;k ${esc((x.load || o.load || []).join(' · ') || '—')}</small></div><div class="resource"><div class="resource-head"><strong>RAM</strong><b class="${tone(m.percent)}">%${esc(m.percent ?? 0)}</b></div><div class="progress"><i class="${tone(m.percent)}" style="width:${pct(m.percent)}%"></i></div><small>${esc(NP.fmt.bytes(m.used || 0))} / ${esc(NP.fmt.bytes(m.total || 0))}</small></div><div class="resource"><div class="resource-head"><strong>Disk</strong><b class="${tone(d.percent)}">%${esc(d.percent ?? 0)}</b></div><div class="progress"><i class="${tone(d.percent)}" style="width:${pct(d.percent)}%"></i></div><small>${esc(NP.fmt.bytes(d.used || 0))} / ${esc(NP.fmt.bytes(d.total || 0))}</small></div>${x.temp != null ? `<div class="resource"><strong>S&#305;cakl&#305;k</strong> ${esc(x.temp)} ?C</div>` : ''}</div></section>`;
+    let infoCard = `<section class="card">${cardHead('router', 'Cihaz bilgileri')}<div class="info-grid">${[
       ['Model', o.model],
       ['Hostname', o.hostname],
       ['Firmware', o.firmware],
@@ -2489,7 +2487,8 @@
       .map(([k, v]) => `<div><small>${k}</small><strong>${esc(v || '—')}</strong></div>`)
       .join(
         '',
-      )}</div></section><section class="card span-5">${cardHead('system', 'Y&#246;netim')}<button class="btn danger" data-reboot>Yeniden ba&#351;lat</button><p><a href="/cgi-bin/luci/">Geli&#351;mi&#351; ayarlar (LuCI) ↗</a></p><button class="btn" data-logout>&#199;&#305;k&#305;&#351; yap</button></section>${updateCard()}<section class="card span-5">${cardHead('lock', 'Panel &#351;ifresi')}<form id="password-form"><div class="pw-grid">${[
+      )}</div></section>`;
+    let pwCard = `<section class="card">${cardHead('lock', 'Panel &#351;ifresi')}<form id="password-form"><div class="pw-grid">${[
       ['Mevcut &#351;ifre', 'old'],
       ['Yeni &#351;ifre', 'next'],
       ['Yeni &#351;ifre (tekrar)', 'repeat'],
@@ -2500,7 +2499,11 @@
       )
       .join(
         '',
-      )}</div><div class="password-strength" id="password-strength"></div><div class="form-error" id="password-error"></div><p class="field-hint">Bu &#351;ifre router'&#305;n root &#351;ifresidir; SSH ve LuCI giri&#351;i de de&#287;i&#351;ir.</p><button class="btn primary" id="password-save" type="submit" disabled>&#350;ifreyi kaydet</button></form></section></div>`;
+      )}</div><div class="password-strength" id="password-strength"></div><div class="form-error" id="password-error"></div><p class="field-hint">Bu &#351;ifre router'&#305;n root &#351;ifresidir; SSH ve LuCI giri&#351;i de de&#287;i&#351;ir.</p><button class="btn primary" id="password-save" type="submit" disabled>&#350;ifreyi kaydet</button></form></section>`;
+    // Kaynaklar tam genişlik; altında iki eşit sütun (kısa kartların altında boşluk kalmaz), telefonda tek sütun
+    if (!state.xTz && !state.xTzError) loadX('xTz', () => NP.getTimezone(), '/system');
+    if (!state.xNotify && !state.xNotifyError) loadX('xNotify', () => NP.getNotify(), '/system');
+    return `${pageHead('Cihaz y&#246;netimi', 'Sistem', 'Router durumu ve y&#246;netim se&#231;enekleri.')}<div class="grid">${resCard}<div class="sys-cols span-12"><div class="x-stack">${infoCard}${adminCard()}${securityCard()}${tzCard()}</div><div class="x-stack">${updateCard()}${pwCard}${backupCard()}${notifyCard()}</div></div></div>`;
   }
   function render() {
     root.innerHTML = nav();
@@ -2529,13 +2532,6 @@
     else {
       state.page = '/';
       c.innerHTML = state.overview ? home() : '';
-    }
-    if (state.page === '/system') {
-      let section = document.createElement('section');
-      section.className = 'card span-12';
-      section.innerHTML = `<div class="card-head"><h2>Geli&#351;mi&#351;</h2></div><div class="toggle-line"><div><strong>Flow offloading</strong><p>A&#231;&#305;kken CPU y&#252;k&#252; azal&#305;r ama h&#305;z s&#305;n&#305;r&#305;, cihaz h&#305;zlar&#305; ve oyun &#246;nceli&#287;i &#231;al&#305;&#351;maz.</p></div><input class="switch" type="checkbox" data-offload ${(state.sqm?.offload ?? state.status.offload) ? 'checked' : ''}></div>`;
-      c.querySelector('.grid')?.append(section);
-      c.querySelector('.grid')?.insertAdjacentHTML('beforeend', systemExtras());
     }
     if (state.page === '/devices' || state.page.startsWith('/devices/')) {
       c.querySelector('.page-head')?.insertAdjacentHTML('afterend', newDevicesCard());
@@ -2991,7 +2987,7 @@
       try {
         localStorage.setItem('np_offload_ok', '1');
       } catch (_) {}
-      toast('Uyarı gizlendi. Sistem > Gelişmiş bölümünden değiştirebilirsiniz.');
+      toast('Uyarı gizlendi. Sistem > Yönetim ve bakım bölümünden değiştirebilirsiniz.');
       render();
       return;
     }

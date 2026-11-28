@@ -2901,3 +2901,21 @@ input.field {
 .bk-restart p { margin: 2px 0 0; font-size: 12px; color: var(--muted); }
 .bk-spin { width: 22px; height: 22px; flex: none; border-radius: 50%; border: 3px solid var(--accent-soft); border-top-color: var(--accent); animation: bkspin 0.9s linear infinite; }
 @keyframes bkspin { to { transform: rotate(360deg); } }
+
+/* ── Sistem sayfası: iki eşit sütun (masaüstü), tek sütun (tablet/telefon) ── */
+.sys-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: inherit; align-items: start; }
+.sys-cols .card { grid-column: auto; }
+@media (max-width: 1100px) { .sys-cols { grid-template-columns: minmax(0, 1fr); } }
+.adm-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.adm-actions a.btn:not(.danger) { color: var(--text); text-decoration: none; }
+.adm-actions .btn svg { width: 15px; height: 15px; margin-right: 6px; vertical-align: -3px; }
+.adm-card .toggle-line { margin-bottom: 4px; }
+@media (max-width: 520px) { .adm-actions .btn { flex: 1 1 calc(50% - 8px); justify-content: center; text-align: center; } }
+
+/* ── Büyük ekranlarda kenar çubuğu ve üst bar da içerikle birlikte büyür ── */
+:root { --side-z: 1; }
+.sidebar, .topbar { zoom: var(--side-z); }
+@media (min-width: 1051px) { .main { margin-left: calc(224px * var(--side-z)); } }
+@media (min-width: 1900px) { :root { --side-z: 1.1; } }
+@media (min-width: 2300px) { :root { --side-z: 1.2; } }
+@media (min-width: 3200px) { :root { --side-z: 1.4; } }

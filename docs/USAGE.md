@@ -149,7 +149,7 @@ Added to the home screen, NetOS opens full screen with its own icon and name.
 | Symptom | Fix |
 |---|---|
 | Second line shows "offline" but the modem has internet | NetOS automatically switches reverse-path filtering (`rp_filter`) to loose mode for multi-line setups. Manually: `ssh root@192.168.1.1 "sysctl -w net.ipv4.conf.all.rp_filter=2"` |
-| Device speeds / speed limits don't work | Flow offloading is on. Use **Turn off (recommended)** in the alert or **System > Advanced** |
+| Device speeds / speed limits don't work | Flow offloading is on. Use **Turn off (recommended)** in the alert or **System > Administration & maintenance** |
 | Static IP or line rule has no effect | Turn the device's Wi-Fi off and on so it picks up the new IP |
 | A port drops often ("# drops") | Check the cable and the device on the other end; if that computer goes to sleep, this is normal |
 | Port linked at 1G instead of 2.5G | Use at least a Cat5e cable (Cat6 recommended for 2.5G) and make sure the other device's port is 2.5G |

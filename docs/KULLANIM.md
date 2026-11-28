@@ -145,7 +145,7 @@ NetOS, ana ekrana eklenince kendi ikonu ve adıyla tam ekran açılır.
 | Belirti | Çözüm |
 |---|---|
 | İkinci hat "çevrimdışı" ama modemde internet var | NetOS çoklu hatta ters yol filtresini (`rp_filter`) otomatik gevşek moda alır. Elle: `ssh root@192.168.1.1 "sysctl -w net.ipv4.conf.all.rp_filter=2"` |
-| Cihaz hızları / hız sınırı çalışmıyor | Flow offloading açık. Uyarıdaki **Kapat (önerilen)** düğmesi ya da **Sistem > Gelişmiş** |
+| Cihaz hızları / hız sınırı çalışmıyor | Flow offloading açık. Uyarıdaki **Kapat (önerilen)** düğmesi ya da **Sistem > Yönetim ve bakım** |
 | Sabit IP ya da hat kuralı etkisiz | Cihazın Wi-Fi'sini kapatıp açın (yeni IP'yi alsın) |
 | Port sık kopuyor ("# kopma") | Kabloyu ve karşı cihazı kontrol edin; karşıdaki bilgisayar uykuya giriyorsa bu normaldir |
 | Port 2.5G yerine 1G bağlı | Kablo en az Cat5e (2.5G için Cat6 önerilir) ve karşı cihazın portu 2.5G olmalı |
