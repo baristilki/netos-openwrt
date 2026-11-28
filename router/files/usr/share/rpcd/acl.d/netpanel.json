@@ -43,7 +43,8 @@
 					"hw_guest_get",
 					"ping_host",
 					"apps_heavy",
-					"ssl_status"
+					"ssl_status",
+					"wanui_get"
 				],
 				"system": [
 					"board",
@@ -153,7 +154,10 @@
 					"hw_guest_set",
 					"hw_guest_extend",
 					"hw_guest_qr",
-					"ssl_setup"
+					"ssl_setup",
+					"factory_reset",
+					"wanui_set",
+					"portui_set"
 				],
 				"system": [
 					"reboot"

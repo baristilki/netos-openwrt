@@ -479,6 +479,14 @@
   }
 
   // yerel cihaza ping -> { received (0-3), avgMs | null }
+  // Fabrika ayarları: confirm === 'SIFIRLA' olmalı. Router tüm ayarları (NetOS dahil) silip yeniden başlar.
+  // Hat görünen adı + operatör (yalnız arayüz) -> { Turknet: { label, isp }, ... }
+  async function getWanUi() { const r = await npCall('wanui_get', {}); return { ...(r.wans || {}), _ports: r.ports || {} }; }
+  async function setPortSpeed(dev, speed) { await npCall('portui_set', { dev, speed: +speed || 0 }); }
+  async function setWanUi(name, label, isp) { await npCall('wanui_set', { name, label: String(label || '').trim(), isp: isp || '' }); }
+  async function factoryReset(confirm) { return npCall('factory_reset', { confirm: String(confirm || '') }); }
+  // bu kurulumda fabrika ayarı mümkün mü -> { supported, reason }
+  async function factorySupport() { const r = await npCall('factory_reset', { confirm: '', check: true }); return { supported: !!r.supported, reason: r.reason || '' }; }
   async function pingHost(ip) {
     if (!validate.ip(ip)) throw new ApiError('Geçersiz IP adresi', 'validate');
     const r = await npCall('ping_host', { ip });
@@ -1658,6 +1666,8 @@
         return r(1, 1) || r(21, 1) || r(1, 21) || (!f(0, 0) && !f(20, 0) && !f(0, 20) && x > 0 && y > 0 && x < 28 && y < 28 && ((x * 7 + y * 13 + x * y) % 5 < 2)) ? `<rect x="${x}" y="${y}" width="1" height="1"/>` : ''; }).join('') + '</svg>';
     const demoCf = { installed: true, enabled: true, token_set: true, token_valid: true, tunnel_id: 'a1b2c3d4-1111-2222-3333-444455556666',
       running: true, connections: 4, hosts: [{ hostname: 'ha.ornek.com', service: 'http://192.168.1.199:8123' }], curl: true };
+    const demoPortUi = {};
+    const demoWanUi = { Turknet: { label: 'Turknet Fiber', isp: 'turknet' }, wan2: { label: '', isp: '' } };
     const demoSsl = { ca: false, ca_expires: 0, cert_by_netos: false, cert_expires: nowSec() + 300 * 86400, names: 'DNS:OpenWrt', ca_url: '/netos-ca.crt' };
     const demoGuest = { enabled: true, ssid: 'Huawei-Misafir', secure: true, password: 'misafir2026', valid: 2, until: nowSec() + 15 * 3600 + 1200, limit: true, limit_mbps: 20 };
     const hwCfg = { dbho: false, bands: [
@@ -1874,6 +1884,10 @@
         return { ok: true };
       },
       'netpanel.usage_get': (a) => ({ days: demoUsage.slice(0, a.days || 31) }),
+      'netpanel.wanui_get': () => ({ wans: JSON.parse(JSON.stringify(demoWanUi)), ports: { ...demoPortUi } }),
+      'netpanel.portui_set': (a) => { if (+a.speed) demoPortUi[a.dev] = +a.speed; else delete demoPortUi[a.dev]; return { ok: true }; },
+      'netpanel.wanui_set': (a) => { demoWanUi[a.name] = { label: a.label || '', isp: a.isp || '' }; return { ok: true }; },
+      'netpanel.factory_reset': (a) => a.check ? { ok: true, supported: true } : (a.confirm === 'SIFIRLA' ? { ok: false, error: 'Demo modunda sıfırlama yapılmaz' } : { ok: false, error: 'Onay metni hatalı; SIFIRLA yazın' }),
       'netpanel.ping_host': (a) => (/\.(2|3|10)$/.test(a.ip) ? { ok: true, received: 3, avg_ms: 1 + (a.ip.length % 7) * 1.3 } : { ok: true, received: 0, avg_ms: null }),
       'netpanel.ssl_status': () => ({ ok: true, ...demoSsl }),
       'netpanel.ssl_setup': () => { Object.assign(demoSsl, { ca: true, ca_expires: nowSec() + 3650 * 86400, cert_by_netos: true, cert_expires: nowSec() + 397 * 86400, names: 'IPAddress:192.168.1.1 DNS:OpenWrt DNS:openwrt.lan' }); return { ok: true, ...demoSsl }; },
@@ -2120,7 +2134,7 @@
     getHuawei, setHuaweiWifi, setHuaweiConfig, getHuaweiWifi, saveHuaweiWifi, scanHuaweiChannels, WIFI_CHANNELS: CHANNELS,
     getWans: () => getWans(), getSystem, changePassword, scanWeb,
     getWanConfig, setWan, setWanMode, getPorts, addWan, confirmWan, revertWan, reconnectWan, getWanEvents, MODE_LABELS,
-    getUsage, getApps, getHeavy, getSsl, setupSsl, getPingHistory, pingHost, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
+    getUsage, getApps, getHeavy, getSsl, setupSsl, factoryReset, factorySupport, getWanUi, setWanUi, setPortSpeed, getPingHistory, pingHost, getNewDevices, ackNewDevices, getNotify, setNotify, testNotify, getTimezone, setTimezone, TIMEZONES,
     downloadBackup, inspectBackup, restoreBackup, getTunnel, setTunnelToken, setTunnelEnabled, cfLookup, cfPublish, cfUnpublish, parseSchedule,
     getPortForwards, savePortForward, deletePortForward, setUpnp, setFirewall, getConnections, getLan, setLan, confirmLan, revertLan,
     getGuestWifi, setGuestWifi, extendGuestWifi, getGuestQr, getVpn, setupVpn, setVpn, addVpnPeer, deleteVpnPeer, qrSvg, wifiQrText, installPkg, pkgStatus,

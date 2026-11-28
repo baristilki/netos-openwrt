@@ -292,7 +292,47 @@ st_sched_set() {
 	echo '{"ok":true}'
 }
 
+# ── internet hattı görünen adı ve operatörü: netpanel.wanui.<hat>_label / <hat>_isp ──
+wanui_get() {
+	local n first=1
+	printf '{"wans":{'
+	for n in $(np_wan_nets); do
+		[ $first = 1 ] || printf ','; first=0
+		printf '"%s":{"label":"%s","isp":"%s"}' "$n" \
+			"$(uci -q get "netpanel.wanui.${n}_label" | sed 's/["\\]//g')" "$(uci -q get "netpanel.wanui.${n}_isp")"
+	done
+	printf '},"ports":{'
+	uci -q show netpanel.portui | sed -n "s/^netpanel\.portui\.\([A-Za-z0-9_]*\)_speed='\{0,1\}\([0-9]*\)'\{0,1\}$/\1 \2/p" |
+		awk 'BEGIN { f = 1 } { printf "%s\"%s\":%d", (f ? "" : ","), $1, $2; f = 0 }'
+	printf '}}\n'
+}
+portui_set() {
+	local input d sp
+	input=$(cat); json_load "$input" 2>/dev/null || err "Geçersiz istek"
+	json_get_var d dev; json_get_var sp speed
+	case "$d" in '' | *[!A-Za-z0-9_]*) err "Geçersiz port" ;; esac
+	case "$sp" in 0 | 10 | 100 | 1000 | 2500 | 5000 | 10000) ;; *) err "Geçersiz hız" ;; esac
+	[ "$(uci -q get netpanel.portui)" = portui ] || uci set netpanel.portui=portui
+	if [ "$sp" = 0 ]; then uci -q delete "netpanel.portui.${d}_speed"; else uci set "netpanel.portui.${d}_speed=$sp"; fi
+	uci commit netpanel
+	echo '{"ok":true}'
+}
+wanui_set() {
+	local input n l i
+	input=$(cat); json_load "$input" 2>/dev/null || err "Geçersiz istek"
+	json_get_var n name; json_get_var l label; json_get_var i isp
+	case "$n" in '' | *[!A-Za-z0-9_]*) err "Geçersiz hat" ;; esac
+	np_wan_nets | grep -qx "$n" || err "Bilinmeyen internet hattı"
+	l=$(printf '%s' "$l" | tr -d '"\\\n\r' | cut -c1-24)
+	case "$i" in '' | turknet | superonline | turktelekom | vodafone | millenicom | dsmart | kablonet | turkcell | other) ;; *) err "Geçersiz operatör" ;; esac
+	[ "$(uci -q get netpanel.wanui)" = wanui ] || uci set netpanel.wanui=wanui
+	if [ -n "$l" ]; then uci set "netpanel.wanui.${n}_label=$l"; else uci -q delete "netpanel.wanui.${n}_label"; fi
+	if [ -n "$i" ]; then uci set "netpanel.wanui.${n}_isp=$i"; else uci -q delete "netpanel.wanui.${n}_isp"; fi
+	uci commit netpanel
+	echo '{"ok":true}'
+}
+
 case "$1" in
-usage_get | ping_get | newdev_list | newdev_ack | notify_get | notify_set | notify_test | tz_get | tz_set | backup_create | backup_restore | integ_get | integ_set | st_sched_get | st_sched_set | tp_config | conn_list) "$1" ;;
+usage_get | ping_get | newdev_list | newdev_ack | notify_get | notify_set | notify_test | tz_get | tz_set | backup_create | backup_restore | integ_get | integ_set | st_sched_get | st_sched_set | tp_config | conn_list | wanui_get | wanui_set | portui_set) "$1" ;;
 *) echo "kullanım: $0 <komut>" >&2; exit 1 ;;
 esac

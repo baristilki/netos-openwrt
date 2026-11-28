@@ -91,7 +91,7 @@
       sun: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>',
       moon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/></svg>',
     })[name] || '';
-  const APP_VERSION = '1.3.5';
+  const APP_VERSION = '1.4.0';
   // [yol, ikon, ad, mobil alt menüde mi (değilse "Menü" sayfasında)]
   const navGroups = [
     ['Ağ', [['/', 'home', 'Ana sayfa', 1], ['/internet', 'globe', 'İnternet', 1], ['/devices', 'devices', 'Cihazlar', 1], ['/wifi', 'wifi', 'Wi-Fi', 1], ['/lan', 'router', 'Yerel ağ'], ['/ports', 'shield', 'Port yönlendirme']]],
@@ -258,7 +258,7 @@
                   ? 'Çevrimdışı'
                   : w.status || 'Bilinmiyor',
             rate = per[w.name] || {};
-          return `<article class="wan-item"><div class="wan-item-head"><strong>${esc(w.name || w.label || 'WAN')}</strong><span class="badge">${esc(w.protoLabel || w.proto || '')}</span>${n === 0 ? '<span class="badge ok">Ana hat</span>' : ''}${w.cgnat ? '<span class="badge" title="Operatör NAT\'ı arkasında: dışarıdan port açma çalışmaz.">CGNAT</span>' : ''}<span class="wan-status"><i class="dot ${w.online ? '' : 'off'}"></i>${esc(status)}</span></div><div class="wan-meta"><div class="meta-item"><small>IP</small><strong class="num">${esc(w.ip || '—')}</strong></div><div class="meta-item"><small>Ağ geçidi</small><strong class="num">${esc(w.gateway || '—')}</strong></div><div class="meta-item"><small>Çalışma süresi</small><strong>${fmtUptime(w.uptime)}</strong></div><div class="meta-item"><small>Canlı hız</small><strong>↓ ${esc(NP.fmt.bits(rate.down || 0))} · ↑ ${esc(NP.fmt.bits(rate.up || 0))}</strong></div></div>${w.tracking?.targets?.length ? `<div class="track-info">İzleme: ${w.tracking.targets.map((t) => `${esc(t.ip)} ${t.status === 'online' ? '✓' : `kayıp %${esc(t.loss ?? 100)}`}`).join(' · ')}</div>` : ''}</article>`;
+          return `<article class="wan-item"><div class="wan-item-head"><strong class="wan-title">${ispBadge(w.name)}${esc(wanTitle(w.name || w.label))}</strong><span class="badge">${esc(w.protoLabel || w.proto || '')}</span>${n === 0 ? '<span class="badge ok">Ana hat</span>' : ''}${w.cgnat ? '<span class="badge" title="Operatör NAT\'ı arkasında: dışarıdan port açma çalışmaz.">CGNAT</span>' : ''}<span class="wan-status"><i class="dot ${w.online ? '' : 'off'}"></i>${esc(status)}</span></div><div class="wan-meta"><div class="meta-item"><small>IP</small><strong class="num">${esc(w.ip || '—')}</strong></div><div class="meta-item"><small>Ağ geçidi</small><strong class="num">${esc(w.gateway || '—')}</strong></div><div class="meta-item"><small>Çalışma süresi</small><strong>${fmtUptime(w.uptime)}</strong></div><div class="meta-item"><small>Canlı hız</small><strong>↓ ${esc(NP.fmt.bits(rate.down || 0))} · ↑ ${esc(NP.fmt.bits(rate.up || 0))}</strong></div></div>${w.tracking?.targets?.length ? `<div class="track-info">İzleme: ${w.tracking.targets.map((t) => `${esc(t.ip)} ${t.status === 'online' ? '✓' : `kayıp %${esc(t.loss ?? 100)}`}`).join(' · ')}</div>` : ''}</article>`;
         })
         .join('') || '<div class="empty">WAN bilgisi bulunamadı.</div>'
     }</div><div class="traffic-row"><div class="traffic-value down">↓ ${esc(NP.fmt.bits(state.traffic.down))}<small> indirme</small></div><div class="traffic-value up">↑ ${esc(NP.fmt.bits(state.traffic.up))}<small> yükleme</small></div>${chart()}</div></section>`;
@@ -328,7 +328,7 @@
     let out = [];
     if (state.error) out.push({ id: 'conn', level: 'bad', title: 'Router’a ulaşılamıyor', text: 'Veriler güncellenemiyor; bağlantıyı kontrol edin.' });
     if (state.xSec?.rootPwEmpty) out.push({ id: 'pw', level: 'bad', title: 'Router’ın şifresi yok', text: 'Aynı ağdaki herkes bu panele, LuCI’ye ve SSH’a şifresiz girebilir.', href: '#/welcome', action: 'Şifre belirle' });
-    for (let w of state.overview?.wans || []) if (w.status === 'offline' || w.online === false) out.push({ id: 'wan:' + w.name, level: 'bad', title: `${w.label || w.name} çevrimdışı`, text: 'Bu internet hattından bağlantı yok; modemi ve kabloyu kontrol edin.', href: '#/internet', action: 'İnternet' });
+    for (let w of state.overview?.wans || []) if (w.status === 'offline' || w.online === false) out.push({ id: 'wan:' + w.name, level: 'bad', title: `${wanTitle(w.name)} çevrimdışı`, text: 'Bu internet hattından bağlantı yok; modemi ve kabloyu kontrol edin.', href: '#/internet', action: 'İnternet' });
     if (NP.hasSession() && !state.xNewdev && !state.xNewdevError) loadX('xNewdev', () => NP.getNewDevices(), '-');
     let nd = (state.xNewdev?.items || []).filter((x) => x.unseen);
     if (nd.length) out.push({ id: 'newdev:' + nd.map((x) => x.mac).join(','), level: 'warn', title: `${nd.length} yeni cihaz ağa katıldı`, text: nd.slice(0, 3).map((x) => x.hostname || NP.fmt.mac(x.mac)).join(', ') + (nd.length > 3 ? '…' : ''), href: '#/devices', action: 'Cihazlar' });
@@ -403,7 +403,8 @@
     try {
       let r = await NP.pingHost(c.ip);
       state.pingRes[mac] = r;
-      toast(r.received ? `${c.displayName}: yanıt veriyor${r.avgMs != null ? ' (' + fmtMs(r.avgMs) + ')' : ''}` : `${c.displayName}: yanıt vermiyor`);
+      toast(r.received ? `✓ ${c.displayName} yanıt veriyor · ping ${r.avgMs != null ? fmtMs(r.avgMs) : 'var'} · ${r.received}/3 paket` : `✕ ${c.displayName} yanıt vermiyor (0/3 paket). Cihaz kapalı olabilir ya da ping'i engelliyor olabilir.`);
+      setTimeout(() => { if (state.pingRes?.[mac] === r) { delete state.pingRes[mac]; if (state.page === '/devices') updateDevicesLive(); } }, 4000);
     } catch (x) {
       state.pingRes[mac] = { received: 0, avgMs: null };
       toast(x.message);
@@ -442,6 +443,8 @@
     if (p.role === 'other') return ['lan', 'Ağ', p.nets.join(', ')];
     return ['free', 'Boş', 'Kullanılmıyor'];
   }
+  /* ── Portlar: anahtar paneli görünümü; hız büyük etiket (2.5G / 1G…), WAN'da operatör rozeti ── */
+  const speedTag = (m) => (!m ? '' : m >= 1000 ? (m % 1000 ? (m / 1000).toFixed(1) : m / 1000) + 'G' : m + 'M');
   function portsCard() {
     if (!state.xPorts && !state.xPortsError && !state.xLoading?.xPorts)
       (async () => {
@@ -456,39 +459,89 @@
       })();
     let P = state.xPorts;
     if (!P?.ports?.length) return '';
+    wanUi('');
+    let manual = state.xWanUi?._ports || {}, edit = state.portEdit;
     let warns = [];
     let tiles = P.ports
       .map((p) => {
         let [cls, title, sub] = portRole(p),
-          slow = p.link && p.speed && p.maxSpeed > p.speed,
+          real = p.link && p.speed ? p.speed : 0,
+          man = !real && p.link ? manual[p.name] || 0 : 0,
+          sp = real || man,
+          slow = p.link && real && p.maxSpeed > real,
           half = p.link && p.duplex === 'half',
           r = P.rate?.[p.name],
-          sp = !p.link ? 'Kablo yok' : p.speed ? portSpeed(p.speed) : p.virtual ? 'Sanal bağlantı' : 'Bağlı';
-        if (slow) warns.push(`<b>${esc(p.name)}</b> portu ${portSpeed(p.maxSpeed)} destekliyor ama ${portSpeed(p.speed)} ile bağlı. Kabloyu (en az Cat5e, 2.5 Gbit için Cat6) ve karşı cihazın port hızını kontrol edin.`);
+          wanNet = cls === 'wan' ? (p.nets || [])[0] : null;
+        if (slow) warns.push(`<b>${esc(p.name)}</b> portu ${portSpeed(p.maxSpeed)} destekliyor ama ${portSpeed(real)} ile bağlı. Kabloyu (en az Cat5e, 2.5 Gbit için Cat6) ve karşı cihazın port hızını kontrol edin.`);
         if (half) warns.push(`<b>${esc(p.name)}</b> yarı çift yönlü (half duplex) çalışıyor; bu genelde kablo ya da karşı cihaz sorunudur ve hızı düşürür.`);
+        let state_ = !p.link ? 'down' : slow || half ? 'warn' : 'up';
+        let speedEl = !p.link
+          ? '<span class="pt-speed none">—</span>'
+          : sp
+            ? `<span class="pt-speed${sp >= 2500 ? ' fast' : ''}">${speedTag(sp)}<small>bit/s</small></span>`
+            : '<span class="pt-speed none">?</span>';
+        let note = !p.link ? 'Kablo takılı değil' : real ? (p.duplex === 'half' ? 'Yarı çift yönlü' : 'Tam çift yönlü') : man ? 'Elle girildi' : p.virtual ? 'Sanal port · hız görünmüyor' : 'Hız bilinmiyor';
+        let editor =
+          edit === p.name
+            ? `<form class="pt-edit" data-port-speed="${esc(p.name)}"><select class="field" name="speed">${[[0, 'Otomatik / bilinmiyor'], [100, '100 Mbit'], [1000, '1 Gbit'], [2500, '2.5 Gbit'], [5000, '5 Gbit'], [10000, '10 Gbit']].map(([v, l]) => `<option value="${v}"${(manual[p.name] || 0) === v ? ' selected' : ''}>${l}</option>`).join('')}</select><button class="btn small primary" type="submit">Kaydet</button></form>`
+            : '';
         let tip = [p.name, p.mac, p.driver, p.flaps ? `açılıştan beri ${p.flaps} kez koptu` : ''].filter(Boolean).join(' · ');
-        return `<div class="port-tile ${cls}${p.link ? ' up' : ''}${slow || half ? ' warn' : ''}" title="${esc(tip)}"><div class="port-jack"><i></i><b></b></div><div class="port-info"><strong>${esc(title)}</strong><span>${esc(sub)}</span><span class="port-speed num">${esc(sp)}${p.link && p.speed && p.duplex === 'full' ? '' : ''}</span>${p.link && r ? `<small class="num">↓ ${esc(NP.fmt.bits(r.down))} · ↑ ${esc(NP.fmt.bits(r.up))}</small>` : ''}<small class="port-name num">${esc(p.name)}${p.flaps ? ` · ${p.flaps} kopma` : ''}</small></div></div>`;
+        return `<div class="pt ${cls} ${state_}" title="${esc(tip)}">
+          <div class="pt-top"><span class="pt-jack"><i></i><i></i><i></i><i></i><b></b></span><span class="pt-led"></span>${speedEl}</div>
+          <div class="pt-role">${wanNet ? ispBadge(wanNet) : ''}<strong>${esc(wanNet ? wanTitle(wanNet) : title)}</strong></div>
+          <div class="pt-sub">${esc(wanNet ? 'İnternet · ' + p.name : sub + ' · ' + p.name)}${p.flaps ? ` · <span class="pt-flaps">${p.flaps} kopma</span>` : ''}</div>
+          <div class="pt-note">${esc(note)}${!real && p.link && p.virtual ? ` <button class="pt-pen" type="button" data-port-edit="${esc(p.name)}" title="Kablo hızını elle gir" aria-label="Kablo hızını elle gir">✎</button>` : ''}</div>
+          ${p.link && r ? `<div class="pt-rate num"><span>↓ ${esc(NP.fmt.bits(r.down))}</span><span>↑ ${esc(NP.fmt.bits(r.up))}</span></div>` : '<div class="pt-rate"></div>'}
+          ${editor}</div>`;
       })
       .join('');
     let virt = P.ports.some((p) => p.virtual && p.link && !p.speed);
-    return `<section class="card span-12">${cardHead('ethernet', 'Portlar')}<div class="port-grid">${tiles}</div>${warns.map((w) => `<div class="alert">⚠ ${w}</div>`).join('')}${virt ? '<p class="field-hint">Router sanal makinede çalışıyor: portlar sanal (virtio) olduğu için kablonun gerçek hızı burada görünmez; Proxmox’ta fiziksel ağ kartının hızına bakın. Ağ kartını sanal makineye doğrudan verirseniz (PCI passthrough) hız ve kablo durumu burada görünür.</p>' : '<p class="field-hint">Router’a takılı kabloların bağlantı hızı. Arkadaki cihazların (ör. bir switch’e bağlı PC) hızı yalnız o cihazın kendisinde görünür.</p>'}</section>`;
+    return `<section class="card span-12 ports-card">${cardHead('ethernet', 'Portlar')}<div class="pt-grid">${tiles}</div>${warns.map((w) => `<div class="alert">⚠ ${w}</div>`).join('')}${virt ? '<p class="field-hint">Router sanal makinede çalıştığı için kablonun gerçek hızı burada görünmez. ✎ ile her portun fiziksel hızını (Proxmox’taki ağ kartının hızı) elle girebilirsiniz.</p>' : ''}</section>`;
+  }
+  document.addEventListener('click', (e) => {
+    let b = e.target.closest('[data-port-edit]');
+    if (!b) return;
+    state.portEdit = state.portEdit === b.dataset.portEdit ? null : b.dataset.portEdit;
+    if (state.page === '/') updateHomeLive();
+  });
+  document.addEventListener('submit', async (e) => {
+    let f = e.target.closest('[data-port-speed]');
+    if (!f) return;
+    e.preventDefault();
+    try {
+      await NP.setPortSpeed(f.dataset.portSpeed, f.speed.value);
+      state.xWanUi = await NP.getWanUi();
+      state.portEdit = null;
+      toast('Port hızı kaydedildi');
+    } catch (x) {
+      toast(x.message);
+    }
+    if (state.page === '/') updateHomeLive();
+  });
+  /* ── Bugün: toplam kullanım + en çok kullanılan uygulamalar ── */
+  function todayCard() {
+    if (NP.hasSession() && (!state.xToday || Date.now() - state.xToday.t > 120000) && !state.xLoading?.xToday) {
+      state.xLoading = { ...state.xLoading, xToday: true };
+      Promise.all([NP.getUsage(1).catch(() => null), NP.getApps(1).catch(() => null)]).then(([u, a]) => {
+        state.xToday = { t: Date.now(), u, a };
+        state.xLoading.xToday = false;
+        if (state.page === '/') updateHomeLive();
+      });
+    }
+    let x = state.xToday, d = x?.u?.days?.[x.u.days.length - 1], apps = (x?.a?.services || []).slice(0, 5),
+      max = Math.max(1, ...apps.map((s) => s.down + s.up));
+    let body = !x
+      ? '<div class="empty">Yükleniyor…</div>'
+      : `<div class="today-tot"><div><small>İndirilen</small><b class="num">${esc(NP.fmt.bytes(d?.total.rx || 0))}</b></div><div><small>Yüklenen</small><b class="num">${esc(NP.fmt.bytes(d?.total.tx || 0))}</b></div></div>
+        ${apps.length ? `<div class="today-apps">${apps.map((s) => `<div class="today-app"><i class="app-dot" style="background:${appColor(s.name)}"></i><span>${esc(s.name)}</span><em><i style="width:${Math.max(4, ((s.down + s.up) / max) * 100)}%;background:${appColor(s.name)}"></i></em><b class="num">${esc(NP.fmt.bytes(s.down + s.up))}</b></div>`).join('')}</div>` : '<p class="field-hint">Uygulama verisi birkaç dakika içinde görünür.</p>'}`;
+    return `<section class="card span-6 today-card">${cardHead('chart', 'Bugün', '<a href="#/stats">İstatistik →</a>')}${body}</section>`;
   }
   function home() {
     let off = state.status.offload && !state.alertOff && !lsGet('np_offload_ok') && onceBanner('np_offload_banner');
     let online = state.clients.filter((c) => c.online && !c.blocked),
       total = state.clients.length;
     let top = [...online].sort((a, b) => b.down + b.up - (a.down + a.up)).slice(0, 5);
-    return `${pageHead('Genel bakış', esc(state.overview?.hostname || 'Ağınız'), esc(state.overview?.model || 'Router durumu ve bağlı cihazlar'))}${off ? offloadAlert() : ''}<div class="grid">${internetCard()}<section class="card span-5">${cardHead('wifi', 'Wi-Fi', `<a href="#/wifi">Tüm ağlar →</a>`)}<div class="wifi-list">${wifiRows()}</div></section><section class="card span-6">${cardHead('router', 'Ağlar')}<div class="segment-list">${(
-      state.networks.interfaces || []
-    )
-      .filter((n) => !n.isWan)
-      .map(
-        (n) =>
-          `<div class="segment"><div><div class="segment-label"><i class="dot ${n.up ? '' : 'off'}"></i> ${esc(n.label)}</div><div class="segment-ip num">${esc(n.ip || '—')}${n.cidr ? `/${esc(n.cidr.split('/')[1])}` : ''}</div></div><div class="segment-count">${n.clients || 0} aktif cihaz</div></div>`,
-      )
-      .join(
-        '',
-      )}</div></section><section class="card span-6">${cardHead('devices', 'Cihazlar', `<a href="#/devices">Tüm cihazlar →</a>`)}<div class="device-topline"><strong>${online.length}</strong><span>çevrimiçi / ${total} kayıtlı</span></div><div class="traffic-devices">${top.map((c) => `<div class="traffic-device"><span class="traffic-device-name"><span class="type-icon tiny">${typeIcon(c.type)}</span>${esc(c.displayName)}</span><span class="traffic-device-speed">↓ ${esc(NP.fmt.bits(c.down))} · ↑ ${esc(NP.fmt.bits(c.up))}</span><div class="mini-track"><i style="width:${Math.max(3, Math.min(100, ((c.down + c.up) / (top[0]?.down + top[0]?.up || 1)) * 100))}%"></i></div></div>`).join('') || '<div class="empty">Çevrimiçi cihaz yok.</div>'}</div></section>${portsCard()}<section class="card span-12">${cardHead('system', 'Sistem', `<a href="#/system">Sistem bilgileri →</a>`)}<div class="system-stats"><div><span class="metric-label">Çalışma süresi</span><strong>${fmtUptime(state.overview?.uptime)}</strong></div><div><span class="metric-label">CPU yükü · 1 dk</span><strong>${esc(state.overview?.load?.[0] ?? '—')}</strong></div><div><span class="metric-label">Bellek · ${state.overview?.memory?.percent || 0}%</span><strong>${esc(NP.fmt.bytes(state.overview?.memory?.used || 0))} / ${esc(NP.fmt.bytes(state.overview?.memory?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.overview?.memory?.percent || 0)}%"></i></div></div><div><span class="metric-label">CPU</span><strong>${state.system?.cpuEstimated ? '~' : ''}%${esc(state.system?.cpu ?? '—')}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.cpu || 0)}%"></i></div></div><div><span class="metric-label">Disk · ${esc(state.system?.disk?.percent ?? 0)}%</span><strong>${esc(NP.fmt.bytes(state.system?.disk?.used || 0))} / ${esc(NP.fmt.bytes(state.system?.disk?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.disk?.percent || 0)}%"></i></div></div><div><span class="metric-label">Firmware</span><strong>${esc(state.overview?.firmware || '—')}</strong></div></div></section></div>`;
+    return `${pageHead('Genel bakış', esc(state.overview?.hostname || 'Ağınız'), esc(state.overview?.model || 'Router durumu ve bağlı cihazlar'))}${off ? offloadAlert() : ''}<div class="grid">${internetCard()}<section class="card span-5">${cardHead('wifi', 'Wi-Fi', `<a href="#/wifi">Tüm ağlar →</a>`)}<div class="wifi-list">${wifiRows()}</div></section>${todayCard()}<section class="card span-6">${cardHead('devices', 'Cihazlar', `<a href="#/devices">Tüm cihazlar →</a>`)}<div class="device-topline"><strong>${online.length}</strong><span>çevrimiçi / ${total} kayıtlı</span></div><div class="traffic-devices">${top.map((c) => `<div class="traffic-device"><span class="traffic-device-name"><span class="type-icon tiny">${typeIcon(c.type)}</span>${esc(c.displayName)}</span><span class="traffic-device-speed">↓ ${esc(NP.fmt.bits(c.down))} · ↑ ${esc(NP.fmt.bits(c.up))}</span><div class="mini-track"><i style="width:${Math.max(3, Math.min(100, ((c.down + c.up) / (top[0]?.down + top[0]?.up || 1)) * 100))}%"></i></div></div>`).join('') || '<div class="empty">Çevrimiçi cihaz yok.</div>'}</div></section>${portsCard()}<section class="card span-12">${cardHead('system', 'Sistem', `<a href="#/system">Sistem bilgileri →</a>`)}<div class="system-stats"><div><span class="metric-label">Çalışma süresi</span><strong>${fmtUptime(state.overview?.uptime)}</strong></div><div><span class="metric-label">CPU yükü · 1 dk</span><strong>${esc(state.overview?.load?.[0] ?? '—')}</strong></div><div><span class="metric-label">Bellek · ${state.overview?.memory?.percent || 0}%</span><strong>${esc(NP.fmt.bytes(state.overview?.memory?.used || 0))} / ${esc(NP.fmt.bytes(state.overview?.memory?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.overview?.memory?.percent || 0)}%"></i></div></div><div><span class="metric-label">CPU</span><strong>${state.system?.cpuEstimated ? '~' : ''}%${esc(state.system?.cpu ?? '—')}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.cpu || 0)}%"></i></div></div><div><span class="metric-label">Disk · ${esc(state.system?.disk?.percent ?? 0)}%</span><strong>${esc(NP.fmt.bytes(state.system?.disk?.used || 0))} / ${esc(NP.fmt.bytes(state.system?.disk?.total || 0))}</strong><div class="progress"><i style="width:${Math.min(100, state.system?.disk?.percent || 0)}%"></i></div></div><div><span class="metric-label">Firmware</span><strong>${esc(state.overview?.firmware || '—')}</strong></div></div></section></div>`;
   }
   const findIface = (c) =>
     state.networks.interfaces.find((n) => n.name === c.iface) ||
@@ -501,10 +554,11 @@
   }
   // cihaz hangi erişim noktası üzerinden bağlı
   const fmtMs = (v) => (v < 1 ? "<1 ms" : Math.round(v) + " ms");
+  const statusPill = (c) => (c.blocked ? '<span class="st-pill bad"><i></i>Engelli</span>' : c.online ? '<span class="st-pill on"><i></i>Çevrimiçi</span>' : '<span class="st-pill off"><i></i>Çevrimdışı</span>');
   const viaLabel = (c) => (c.via === 'huawei' ? 'Huawei' : c.via === 'tplink' ? 'TP-Link' : 'Router');
   function rowActions(c, web) {
     let p = state.pingRes?.[c.mac];
-    return `<div class="row-actions">${p ? `<span class="ping-res ${p.busy ? '' : p.received ? 'ok' : 'bad'}">${p.busy ? '…' : p.received ? `${p.avgMs != null ? fmtMs(p.avgMs) : 'yanıt var'}` : 'yanıt yok'}</span>` : ''}<button class="icon-btn" type="button" data-ping="${esc(c.mac)}" title="Ping at: cihaz yanıt veriyor mu?" aria-label="Ping at" ${c.ip ? '' : 'disabled'}>${icon('radar')}</button>${web.length ? `<a class="icon-btn" href="${esc(web[0])}" target="_blank" rel="noopener" title="Web arayüzünü aç" aria-label="Web arayüzünü aç" onclick="event.stopPropagation()">${icon('globe')}</a>` : '<span class="icon-btn ghost" aria-hidden="true"></span>'}</div>`;
+    return `<div class="row-actions"><button class="icon-btn${p ? (p.busy ? ' busy' : p.received ? ' ok' : ' bad') : ''}" type="button" data-ping="${esc(c.mac)}" title="Ping at: cihaz yanıt veriyor mu?" aria-label="Ping at" ${c.ip ? '' : 'disabled'}>${icon('radar')}</button>${web.length ? `<a class="icon-btn" href="${esc(web[0])}" target="_blank" rel="noopener" title="Web arayüzünü aç" aria-label="Web arayüzünü aç" onclick="event.stopPropagation()">${icon('globe')}</a>` : '<span class="icon-btn ghost" aria-hidden="true"></span>'}</div>`;
   }
   // Liste sırası sabit kalsın: çevrimiçi/çevrimdışı durumu saniyelik değişse de satırlar zıplamasın.
   // Sıra sayfaya girildiğinde ve 30 dakikada bir yeniden hesaplanır; yeni cihazlar sona eklenir.
@@ -544,12 +598,12 @@
   function deviceRow(c) {
     let i = findIface(c),
       web = (c.web || []).filter((u) => /^https?:\/\//i.test(u));
-    return `<tr data-client="${esc(c.mac)}"><td><span class="status-cell"><i class="dot ${c.blocked ? 'bad' : c.online ? '' : 'off'}"></i>${c.blocked ? 'Engelli' : c.online ? '&#199;evrimi&#231;i' : '&#199;evrimd&#305;&#351;&#305;'}</span></td><td>${signal(c)}</td><td><span class="via-tag ${esc(c.via || 'router')}">${viaLabel(c)}</span></td><td><div class="device-name-cell"><span class="type-icon">${typeIcon(c.type)}</span><span><div class="client-name">${esc(c.displayName)}</div><div class="client-host">${esc(c.hostname || '')}</div></span></div></td><td class="num">${esc(c.ip)}</td><td class="mac">${esc(NP.fmt.mac(c.mac))}</td><td>${esc(i?.label || c.iface || '—')}</td><td class="num">&#8595; ${esc(NP.fmt.bits(c.down))}<br>&#8593; ${esc(NP.fmt.bits(c.up))}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap">${badges(c)}</div></td><td class="actions-cell">${rowActions(c, web)}</td></tr>`;
+    return `<tr data-client="${esc(c.mac)}" class="${c.blocked ? 'is-blocked' : c.online ? 'is-on' : 'is-off'}"><td>${statusPill(c)}</td><td>${signal(c)}</td><td><span class="via-tag ${esc(c.via || 'router')}">${viaLabel(c)}</span></td><td><div class="device-name-cell"><span class="type-icon">${typeIcon(c.type)}</span><span><div class="client-name">${esc(c.displayName)}</div><div class="client-host">${esc(c.hostname || '')}</div></span></div></td><td class="num">${esc(c.ip)}</td><td class="mac">${esc(NP.fmt.mac(c.mac))}</td><td>${esc(i?.label || c.iface || '—')}</td><td class="num">&#8595; ${esc(NP.fmt.bits(c.down))}<br>&#8593; ${esc(NP.fmt.bits(c.up))}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap">${badges(c)}</div></td><td class="actions-cell">${rowActions(c, web)}</td></tr>`;
   }
   function deviceCard(c) {
     let i = findIface(c),
       web = (c.web || []).filter((u) => /^https?:\/\//i.test(u));
-    return `<div class="device-card" data-client="${esc(c.mac)}"><div class="device-card-head"><span class="status-cell"><span class="type-icon">${typeIcon(c.type)}</span><i class="dot ${c.blocked ? 'bad' : c.online ? '' : 'off'}"></i><span class="client-name">${esc(c.displayName)}</span></span>${signal(c)}</div><div class="client-host">${esc(c.hostname || '')} · ${esc(c.ip)}</div><div class="device-card-meta"><span class="badge">${esc(i?.label || c.iface || '—')}</span><span class="via-tag ${esc(c.via || 'router')}">${viaLabel(c)}</span>${badges(c)}<span class="badge">&#8595; ${esc(NP.fmt.bits(c.down))} &#8593; ${esc(NP.fmt.bits(c.up))}</span>${rowActions(c, web)}</div></div>`;
+    return `<div class="device-card ${c.blocked ? 'is-blocked' : c.online ? 'is-on' : 'is-off'}" data-client="${esc(c.mac)}"><div class="device-card-head"><span class="status-cell"><span class="type-icon">${typeIcon(c.type)}</span><i class="dot ${c.blocked ? 'bad' : c.online ? '' : 'off'}"></i><span class="client-name">${esc(c.displayName)}</span></span>${signal(c)}</div><div class="client-host">${esc(c.hostname || '')} · ${esc(c.ip)}</div><div class="device-card-meta"><span class="badge">${esc(i?.label || c.iface || '—')}</span><span class="via-tag ${esc(c.via || 'router')}">${viaLabel(c)}</span>${badges(c)}<span class="badge">&#8595; ${esc(NP.fmt.bits(c.down))} &#8593; ${esc(NP.fmt.bits(c.up))}</span>${rowActions(c, web)}</div></div>`;
   }
   function devices() {
     let list = filtered();
@@ -1038,13 +1092,16 @@
 
   /* ── Sistem sayfası ekleri ── */
   function tzCard() {
+    return `<section class="card">${cardHead('clock', 'Saat dilimi')}${tzBody()}</section>`;
+  }
+  function tzBody() {
     let t = state.xTz;
     let body = !t
       ? '<div class="empty">Yükleniyor…</div>'
       : `${t.isUtc ? '<div class="alert">Router saati UTC (Türkiye saatinden 3 saat geri). Saat planları ve geçmiş kayıtları yanlış saatte görünür.</div>' : ''}
         <div class="x-inline"><select class="field" id="x-tz">${NP.TIMEZONES.map((z) => `<option value="${z.id}"${z.id === t.zone ? ' selected' : ''}>${esc(z.label)}</option>`).join('')}</select><button class="btn small primary" data-x-savetz>Kaydet</button></div>
         <p class="field-hint">Router saati: ${esc(t.now || '—')} (UTC${esc(t.offset || '')})</p>`;
-    return `<section class="card">${cardHead('clock', 'Saat dilimi')}${body}</section>`;
+    return body;
   }
   function notifyCard() {
     let n = state.xNotify;
@@ -1948,6 +2005,63 @@
       })
       .join('')}</div>`;
   }
+  /* ── Cihaz işlemleri: büyük düğmeler + yazılı onaylı fabrika ayarları ── */
+  function opsCard() {
+    let f = state.factory || {};
+    let tile = (attr, ic, t, d, cls = '') => `<button class="ops-tile ${cls}" type="button" ${attr}><span class="ops-ic">${icon(ic)}</span><span><strong>${t}</strong><small>${d}</small></span></button>`;
+    let link = (href, ic, t, d) => `<a class="ops-tile" href="${href}"><span class="ops-ic">${icon(ic)}</span><span><strong>${t}</strong><small>${d}</small></span></a>`;
+    let fr = !f.open
+      ? ''
+      : f.checking
+        ? '<p class="field-hint">Denetleniyor…</p>'
+        : !f.supported
+          ? `<div class="alert" style="margin-top:12px">${esc(f.reason || 'Bu kurulumda fabrika ayarlarına dönüş desteklenmiyor.')}</div>`
+          : `<form class="ops-factory" id="factory-form"><div class="alert alert-strong"><strong>Router fabrika ayarlarına dönecek.</strong> Tüm ayarlar silinir: internet (PPPoE) bilgileri, Wi-Fi, cihaz kayıtları, router şifresi ve <b>NetOS'un kendisi</b>. Router 192.168.1.1 adresiyle, şifresiz ve internetsiz açılır. Önce <b>Yedekleme</b> kartından yedek almanızı öneririz.</div>
+        <label class="field-wrap"><span>Onaylamak için büyük harflerle <b>SIFIRLA</b> yazın</span><input class="field" name="confirm" autocomplete="off" spellcheck="false" placeholder="SIFIRLA"></label>
+        <div class="form-error" id="factory-error"></div>
+        <div class="bk-actions"><button class="btn small" type="button" data-factory-cancel>Vazgeç</button><button class="btn small danger" type="submit" data-factory-go disabled>Fabrika ayarlarına döndür</button></div></form>`;
+    return `<section class="card ops-card">${cardHead('system', 'Cihaz işlemleri')}<div class="ops-grid">
+      ${tile('data-reboot', 'system', 'Yeniden başlat', 'Yaklaşık 1 dakika', 'warn')}
+      ${link('#/logs', 'chart', 'Sistem günlüğü', 'Olaylar ve hatalar')}
+      ${link('/cgi-bin/luci/', 'router', 'LuCI', 'Gelişmiş OpenWrt ayarları ↗')}
+      ${tile('data-logout', 'logout', 'Çıkış yap', 'Bu tarayıcıda oturumu kapat')}
+      </div><button class="ops-danger${f.open ? ' open' : ''}" type="button" data-factory-open>${icon('block')}<span><strong>Fabrika ayarlarına döndür</strong><small>Her şeyi siler, geri alınamaz</small></span></button>${fr}</section>`;
+  }
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('[data-factory-open]')) {
+      let open = !state.factory?.open;
+      state.factory = { open, checking: open };
+      redrawOps();
+      if (open) NP.factorySupport().then((r) => { state.factory = { open: true, ...r }; redrawOps(); setTimeout(() => document.querySelector('#factory-form [name=confirm]')?.focus(), 50); }).catch((x) => { state.factory = { open: true, supported: false, reason: x.message }; redrawOps(); });
+    }
+    if (e.target.closest('[data-factory-cancel]')) { state.factory = {}; redrawOps(); }
+  });
+  document.addEventListener('input', (e) => {
+    if (e.target.matches('#factory-form [name=confirm]')) document.querySelector('[data-factory-go]').disabled = e.target.value.trim() !== 'SIFIRLA';
+  });
+  document.addEventListener('submit', async (e) => {
+    if (e.target.id !== 'factory-form') return;
+    e.preventDefault();
+    let v = e.target.confirm.value.trim(), er = document.getElementById('factory-error');
+    if (v !== 'SIFIRLA') return (er.textContent = 'Onay metni hatalı; SIFIRLA yazın');
+    if (!confirm('Son kez soruyoruz: tüm ayarlar silinecek ve router fabrika ayarlarıyla yeniden başlayacak. Emin misiniz?')) return;
+    let b = e.target.querySelector('[data-factory-go]');
+    b.disabled = true;
+    b.textContent = 'Sıfırlanıyor…';
+    try {
+      await NP.factoryReset(v);
+      if (state.liveStop) state.liveStop();
+      document.getElementById('content').innerHTML = `<div class="reboot-screen"><div><div class="state-orb" style="margin:0 auto 16px">${icon('system')}</div><h1>Fabrika ayarlarına dönülüyor…</h1><p class="subtitle">Router birkaç dakika içinde 192.168.1.1 adresiyle açılacak. NetOS'u yeniden kurmak için README'deki kurulum adımlarını izleyin.</p></div></div>`;
+    } catch (x) {
+      er.textContent = x.message;
+      b.disabled = false;
+      b.textContent = 'Fabrika ayarlarına döndür';
+    }
+  });
+  function redrawOps() {
+    let c = document.querySelector('.ops-card');
+    if (c) c.outerHTML = opsCard();
+  }
   function adminCard() {
     if (!state.xOpt && !state.xOptError) loadX('xOpt', () => NP.getSysOpt(), '/system');
     let o = state.xOpt;
@@ -1960,9 +2074,8 @@
         <div class="x-grid2" id="reboot-when"${o.rebootMode === 'off' ? ' hidden' : ''}><div class="field-wrap" id="reboot-day"${o.rebootMode === 'weekly' ? '' : ' hidden'}><label>Gün</label><select class="field" name="rebootDay">${days.slice(1).map((d, i) => `<option value="${i + 1}"${o.rebootDay === i + 1 ? ' selected' : ''}>${d}</option>`).join('')}</select></div>
         <div class="field-wrap"><label>Saat</label><select class="field" name="rebootHour">${Array.from({ length: 24 }, (_, h) => `<option value="${h}"${+o.rebootHour === h ? ' selected' : ''}>${String(h).padStart(2, '0')}:00</option>`).join('')}</select></div></div>
         <div class="x-form-foot"><button class="btn small primary" type="submit">Kaydet</button></div></form>`;
-    let actions = `<div class="adm-actions"><button class="btn small danger" type="button" data-reboot>${icon('system')}Yeniden başlat</button><a class="btn small" href="#/logs">Sistem günlüğü</a><a class="btn small" href="/cgi-bin/luci/">LuCI ↗</a><button class="btn small" type="button" data-logout>${icon('logout')}Çıkış yap</button></div>`;
     let offload = `<div class="toggle-line"><div><strong>Flow offloading</strong><p>Açıkken işlemci yükü azalır ama hız sınırı, cihaz hızları ve oyun önceliği çalışmaz.</p></div><input class="switch" type="checkbox" data-offload ${(state.sqm?.offload ?? state.status.offload) ? 'checked' : ''}></div>`;
-    return `<section class="card adm-card">${cardHead('system', 'Yönetim ve bakım')}${actions}${offload}${body}</section>`;
+    return `<section class="card adm-card">${cardHead('system', 'Yönetim ve bakım')}${offload}${body}<h3 class="x-sub">Saat dilimi</h3>${tzBody()}</section>`;
   }
 
   /* ── Sistem günlüğü ── */
@@ -2120,6 +2233,52 @@
       done();
     }
   });
+  /* ── Hat görünen adı ve operatör rozeti (yalnız görsel) ── */
+  const ISPS = {
+    turknet: ['TurkNet', 'TN', '#14b37d', '#fff'],
+    superonline: ['Superonline', 'SO', '#ffc300', '#1d1d1b'],
+    turktelekom: ['Türk Telekom', 'TT', '#0a5cb8', '#fff'],
+    vodafone: ['Vodafone', 'VF', '#e60000', '#fff'],
+    millenicom: ['Millenicom', 'MC', '#f26b21', '#fff'],
+    dsmart: ['D-Smart', 'DS', '#d6002a', '#fff'],
+    kablonet: ['Türksat Kablonet', 'KN', '#0098d8', '#fff'],
+    turkcell: ['Turkcell (mobil)', 'TC', '#ffc300', '#0a2e6e'],
+    other: ['Diğer', '•', '#6b7785', '#fff'],
+  };
+  function wanUi(n) {
+    if (!state.xWanUi && !state.xWanUiError && NP.hasSession()) loadX('xWanUi', () => NP.getWanUi(), '-');
+    return state.xWanUi?.[n] || {};
+  }
+  const wanTitle = (n) => wanUi(n).label || n || 'WAN';
+  function ispBadge(n, size = '') {
+    let i = ISPS[wanUi(n).isp];
+    return i ? `<span class="isp-badge ${size}" style="background:${i[2]};color:${i[3]}" title="${esc(i[0])}">${esc(i[1])}</span>` : '';
+  }
+  function wanUiCard() {
+    let w = wanList();
+    if (!w.length) return '';
+    return `<section class="card wanui-card">${cardHead('globe', 'Hat adları ve logolar')}<p class="field-hint">Yalnız panelde görünen adı ve operatör rozetini değiştirir; router'daki gerçek bağlantı adı (${esc(w.map((x) => x.name).join(', '))}) aynı kalır.</p><div class="wanui-list">${w
+      .map(
+        (x) => `<form class="wanui-row" data-wanui="${esc(x.name)}"><span class="wanui-prev">${ispBadge(x.name, 'lg') || '<span class="isp-badge lg empty">?</span>'}</span><div class="field-wrap"><label>${esc(x.name)} · görünen ad</label><input class="field" name="label" maxlength="24" placeholder="${esc(x.name)}" value="${esc(wanUi(x.name).label || '')}"></div><div class="field-wrap"><label>Operatör</label><select class="field" name="isp"><option value="">Seçilmedi</option>${Object.entries(ISPS).map(([k, v]) => `<option value="${k}"${wanUi(x.name).isp === k ? ' selected' : ''}>${esc(v[0])}</option>`).join('')}</select></div><button class="btn small primary" type="submit">Kaydet</button></form>`,
+      )
+      .join('')}</div></section>`;
+  }
+  document.addEventListener('submit', async (e) => {
+    let f = e.target.closest('[data-wanui]');
+    if (!f) return;
+    e.preventDefault();
+    let b = f.querySelector('[type=submit]');
+    b.disabled = true;
+    try {
+      await NP.setWanUi(f.dataset.wanui, f.label.value, f.isp.value);
+      state.xWanUi = await NP.getWanUi();
+      toast('Hat görünümü kaydedildi');
+      render();
+    } catch (x) {
+      toast(x.message);
+      b.disabled = false;
+    }
+  });
   function wanList() {
     return state.wanConfig?.wans || [];
   }
@@ -2177,7 +2336,7 @@
     return wanList().map((w) => {
       let l = by[w.name]?.list || [],
         total = l.reduce((a, x) => a + x.sec, 0);
-      return { name: w.name, label: w.label || w.name, count: l.length, total, longest: l.reduce((a, x) => Math.max(a, x.sec), 0), last: l[l.length - 1] || null, uptime: 100 - (total / (days * 864)) };
+      return { name: w.name, label: wanTitle(w.name), count: l.length, total, longest: l.reduce((a, x) => Math.max(a, x.sec), 0), last: l[l.length - 1] || null, uptime: 100 - (total / (days * 864)) };
     });
   }
   function outageText() {
@@ -2228,7 +2387,7 @@
             `<div class="event-row"><i class="event-dot ${esc(x.level)}"></i><div><strong>${esc(x.iface === '*' ? 'Sistem' : wanList().find((w) => w.name === x.iface)?.label || x.iface)}</strong><span>${esc(x.label)}</span></div><time title="${esc(new Date(x.t).toLocaleString('tr-TR'))}">${fmtAgo(x.t)}</time></div>`,
         )
         .join('') || '<div class="empty">Henüz bağlantı olayı yok.</div>'
-    }</div>${events.length > state.wanShown ? '<button class="btn small" data-more-events>Daha fazla göster</button>' : ''}</section>${outageCard()}</div>`;
+    }</div>${events.length > state.wanShown ? '<button class="btn small" data-more-events>Daha fazla göster</button>' : ''}</section>${outageCard()}${wanUiCard()}</div>`;
   }
   const speedWans = () =>
     state.sqm?.wans?.length
@@ -2295,7 +2454,7 @@
       )
         ? `<div class="alert speed-recommend"><span>Ping&#39;i düşürmek için SQM&#39;i ↓ ${esc(cur.recommendDownMbit)} / ↑ ${esc(cur.recommendUpMbit)} Mbit/s yapın</span><button class="btn small" data-apply-recommend>Önerilen değerleri uygula</button></div>`
         : '';
-    return `${pageHead('Ağ performansı', 'Hız &amp; Ping', 'Hızınızı ve yük altındaki gecikmeyi ölçün.')}<section class="card speed-hero">${cardHead('speed', 'Hız testi')}<div class="speed-controls"><select class="field" id="speed-wan">${wans.map((w, i) => `<option value="${esc(w.name)}" ${i === 0 ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select><button class="btn primary" data-start-speed ${cur?.running ? 'disabled' : ''}>${cur?.running ? 'Test sürüyor…' : 'Testi başlat'}</button></div><div class="speed-live"><div><div class="eyebrow">${phase}</div><strong>${cur?.phase === 'upload' ? esc(cur.up || 0) : esc(cur?.down || 0)}<small> Mbit/s</small></strong><div class="speed-arrows">↓ ${esc(cur?.down || 0)} <span>·</span> ↑ ${esc(cur?.up || 0)}</div></div><div class="speed-meter"><svg viewBox="0 0 180 100" aria-hidden="true"><path d="M15 90 A75 75 0 0 1 165 90"/><path class="meter-value" d="M15 90 A75 75 0 0 1 165 90" style="stroke-dasharray:${Math.max(0, Math.min(100, Number(cur?.progress) || 0))} 100"/></svg><b>${Math.round(cur?.progress || 0)}%</b></div></div><div class="progress speed-progress"><i style="width:${Math.max(0, Math.min(100, cur?.progress || 0))}%"></i></div>${cur?.error ? `<div class="form-error">${esc(cur.error)}</div>` : ''}${cur && !cur.running && cur.phase === 'done' ? `<div class="speed-result"><div class="result-metrics"><div>↓ <b>${esc(cur.down)}</b><small>Mbit/s indirme</small></div><div>↑ <b>${esc(cur.up)}</b><small>Mbit/s yükleme</small></div><div><b>${esc(cur.idleMs)} ms</b><small>Ping (boşta) · jitter ${esc(cur.jitterMs ?? '—')} ms</small></div></div><div class="grade-panel"><span class="grade ${cls}">${esc(grade)}</span><strong>${esc(cur.gradeText || '')}</strong></div><div class="latency-bars">${bars.map(([label, val]) => `<div><span>${label}<b>${esc(val ?? '—')} ms</b></span><i><em style="width:${Math.min(100, ((Number(val) || 0) / max) * 100)}%"></em></i></div>`).join('')}</div><div class="field-hint">Yük altındaki artış: +${esc(cur.increaseMs ?? '—')} ms</div>${recommendation}<button class="btn" data-start-speed>Tekrar test et</button></div>` : ''}</section><section class="card">${cardHead('system', 'Son testler')}<div class="event-list">${(state.speedHistory || []).map((h) => `<div class="event-row"><i class="grade-dot ${esc(h.grade || '')}"></i><div><strong>${esc(h.wan || 'WAN')} · ↓ ${esc(h.down)} / ↑ ${esc(h.up)} Mbit/s</strong><span>Ping ${esc(h.idleMs ?? '—')} ms <span class="badge ${/^(A\+|A)$/.test(h.grade) ? 'ok' : 'warn'}">${esc(h.grade || '—')}</span></span></div><time>${h.t ? esc(new Date(h.t).toLocaleString('tr-TR')) : ''}</time></div>`).join('') || '<div class="empty">Henüz hız testi yok.</div>'}</div></section><section class="card">${cardHead('router', 'Ping düşürme — SQM')}<p class="field-hint">SQM, hat dolduğunda ping&#39;in yükselmesini (bufferbloat) önler. Sınırları ölçülen hızın ~%90&#39;ına ayarlayın.</p>${sqmCard()}</section><section class="card">${cardHead('devices', 'Oyun önceliği')}${gamingWarnings()}${priorityRows()}<p class="field-hint">Öncelik cihazın gönderdiği (yükleme) trafiğine uygulanır; indirmede SQM her cihaza adil pay verir.</p></section>`;
+    return `${pageHead('Ağ performansı', 'Hız &amp; Ping', 'Hızınızı ve yük altındaki gecikmeyi ölçün.')}<section class="card speed-hero">${cardHead('speed', 'Hız testi')}<div class="speed-controls"><select class="field" id="speed-wan">${wans.map((w, i) => `<option value="${esc(w.name)}" ${i === 0 ? 'selected' : ''}>${esc(w.name)}</option>`).join('')}</select><button class="btn primary" data-start-speed ${cur?.running ? 'disabled' : ''}>${cur?.running ? 'Test sürüyor…' : 'Testi başlat'}</button></div><div class="speed-live"><div><div class="eyebrow">${phase}</div><strong>${cur?.phase === 'upload' ? esc(cur.up || 0) : esc(cur?.down || 0)}<small> Mbit/s</small></strong><div class="speed-arrows">↓ ${esc(cur?.down || 0)} <span>·</span> ↑ ${esc(cur?.up || 0)}</div></div><div class="speed-meter"><svg viewBox="0 0 180 100" aria-hidden="true"><path pathLength="100" d="M15 90 A75 75 0 0 1 165 90"/><path class="meter-value" pathLength="100" d="M15 90 A75 75 0 0 1 165 90" style="stroke-dasharray:${Math.max(0, Math.min(100, Number(cur?.progress) || 0))} 100"/></svg><b>${Math.round(cur?.progress || 0)}%</b></div></div><div class="progress speed-progress"><i style="width:${Math.max(0, Math.min(100, cur?.progress || 0))}%"></i></div>${cur?.error ? `<div class="form-error">${esc(cur.error)}</div>` : ''}${cur && !cur.running && cur.phase === 'done' ? `<div class="speed-result"><div class="result-metrics"><div>↓ <b>${esc(cur.down)}</b><small>Mbit/s indirme</small></div><div>↑ <b>${esc(cur.up)}</b><small>Mbit/s yükleme</small></div><div><b>${esc(cur.idleMs)} ms</b><small>Ping (boşta) · jitter ${esc(cur.jitterMs ?? '—')} ms</small></div></div><div class="grade-panel"><span class="grade ${cls}">${esc(grade)}</span><strong>${esc(cur.gradeText || '')}</strong></div><div class="latency-bars">${bars.map(([label, val]) => `<div><span>${label}<b>${esc(val ?? '—')} ms</b></span><i><em style="width:${Math.min(100, ((Number(val) || 0) / max) * 100)}%"></em></i></div>`).join('')}</div><div class="field-hint">Yük altındaki artış: +${esc(cur.increaseMs ?? '—')} ms</div>${recommendation}<button class="btn" data-start-speed>Tekrar test et</button></div>` : ''}</section><section class="card">${cardHead('system', 'Son testler')}<div class="event-list">${(state.speedHistory || []).map((h) => `<div class="event-row"><i class="grade-dot ${esc(h.grade || '')}"></i><div><strong>${esc(h.wan || 'WAN')} · ↓ ${esc(h.down)} / ↑ ${esc(h.up)} Mbit/s</strong><span>Ping ${esc(h.idleMs ?? '—')} ms <span class="badge ${/^(A\+|A)$/.test(h.grade) ? 'ok' : 'warn'}">${esc(h.grade || '—')}</span></span></div><time>${h.t ? esc(new Date(h.t).toLocaleString('tr-TR')) : ''}</time></div>`).join('') || '<div class="empty">Henüz hız testi yok.</div>'}</div></section><section class="card">${cardHead('router', 'Ping düşürme — SQM')}<p class="field-hint">SQM, hat dolduğunda ping&#39;in yükselmesini (bufferbloat) önler. Sınırları ölçülen hızın ~%90&#39;ına ayarlayın.</p>${sqmCard()}</section><section class="card">${cardHead('devices', 'Oyun önceliği')}${gamingWarnings()}${priorityRows()}<p class="field-hint">Öncelik cihazın gönderdiği (yükleme) trafiğine uygulanır; indirmede SQM her cihaza adil pay verir.</p></section>`;
   }
   function speedPage() {
     let html = legacySpeedPage(),
@@ -2503,7 +2662,7 @@
     // Kaynaklar tam genişlik; altında iki eşit sütun (kısa kartların altında boşluk kalmaz), telefonda tek sütun
     if (!state.xTz && !state.xTzError) loadX('xTz', () => NP.getTimezone(), '/system');
     if (!state.xNotify && !state.xNotifyError) loadX('xNotify', () => NP.getNotify(), '/system');
-    return `${pageHead('Cihaz y&#246;netimi', 'Sistem', 'Router durumu ve y&#246;netim se&#231;enekleri.')}<div class="grid">${resCard}<div class="sys-cols span-12"><div class="x-stack">${infoCard}${adminCard()}${securityCard()}${tzCard()}</div><div class="x-stack">${updateCard()}${pwCard}${backupCard()}${notifyCard()}</div></div></div>`;
+    return `${pageHead('Cihaz y&#246;netimi', 'Sistem', 'Router durumu ve y&#246;netim se&#231;enekleri.')}<div class="grid">${resCard}<div class="sys-cols span-12"><div class="x-stack">${infoCard}${adminCard()}${securityCard()}</div><div class="x-stack">${opsCard()}${updateCard()}${pwCard}${backupCard()}${notifyCard()}</div></div></div>`;
   }
   function render() {
     root.innerHTML = nav();
@@ -2582,7 +2741,7 @@
     }
   });
   function login() {
-    root.innerHTML = `<main class="login-screen"><div class="login-theme">${langButton()}${themeButton()}</div><form class="login-card" id="login-form"><div class="brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><h1>Tekrar hoş geldiniz</h1><p>Ev ağınıza güvenli şekilde giriş yapın.</p><div class="field-wrap"><label for="username">Kullanıcı adı</label><input class="field" id="username" name="username" autocomplete="username" value="root"></div><div class="field-wrap"><label for="password">Şifre</label><input class="field" id="password" name="password" type="password" autocomplete="current-password"></div><div class="login-error" id="login-error" role="alert"></div><button class="btn primary" type="submit">Giriş yap</button>${NP.isMock ? '<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:12px">Önizleme modunda herhangi bir şifre kabul edilir.</div>' : ''}</form></main>`;
+    root.innerHTML = `<main class="login-screen"><div class="login-theme">${langButton()}${themeButton()}</div><form class="login-card" id="login-form"><div class="brand">${brandMark}<span class="brand-name"><span>Net</span><b>OS</b></span></div><h1>Tekrar hoş geldiniz</h1><p>Ev ağınızı yönetmek için router şifrenizle giriş yapın.</p><div class="field-wrap"><label for="username">Kullanıcı adı</label><input class="field" id="username" name="username" autocomplete="username" value="root"></div><div class="field-wrap"><label for="password">Şifre</label><input class="field" id="password" name="password" type="password" autocomplete="current-password"></div><div class="login-error" id="login-error" role="alert"></div><button class="btn primary" type="submit">Giriş yap</button><div class="login-foot"><span>NetOS v${esc(APP_VERSION)}</span><span>·</span><span>${location.protocol === 'https:' ? '🔒 Şifreli bağlantı' : 'Yerel ağ'}</span></div>${NP.isMock ? '<div style="text-align:center;color:var(--muted);font-size:11px;margin-top:12px">Önizleme modunda herhangi bir şifre kabul edilir.</div>' : ''}</form></main>`;
   }
   function openClient(mac, changeHash = true) {
     let c = state.clients.find((x) => x.mac === mac);
@@ -2624,7 +2783,7 @@
     let lines = (state.overview?.wans || []).map((w) => w.name).filter(Boolean);
     if (lines.length > 1 || c.wan) {
       let sec = document.createElement('div'),
-        lab = (n) => (state.overview?.wans || []).find((w) => w.name === n)?.label || n;
+        lab = (n) => wanTitle(n);
       sec.className = 'drawer-section';
       sec.innerHTML = `<h3>İnternet hattı</h3><div class="field-wrap"><label for="client-wan">Bu cihaz hangi hattan çıksın?</label><select class="field" id="client-wan" name="wan"><option value="">Otomatik (genel çoklu hat ayarı)</option>${lines
         .map((n) => `<option value="${esc(n)}" ${c.wan === n ? 'selected' : ''}>Önce ${esc(lab(n))} (koparsa diğer hat)</option><option value="${esc(n)}!" ${c.wan === n + '!' ? 'selected' : ''}>Yalnız ${esc(lab(n))}</option>`)
